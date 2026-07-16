@@ -53,8 +53,7 @@ A mentorship marketplace for Bangladesh connecting learners with verified indust
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/AISGHOST12/skillbridge.git
-cd skillbridge
+git clone https://github.com/0ISHRAK/skillbridge.git
 ```
 
 ### 2. Install dependencies
