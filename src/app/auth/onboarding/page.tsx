@@ -7,6 +7,8 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [role, setRole] = useState<"learner" | "mentor">("learner");
   const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   // Learner State
   const [learnerInterests, setLearnerInterests] = useState<string[]>([]);
@@ -22,7 +24,6 @@ export default function OnboardingPage() {
   const [nidUploaded, setNidUploaded] = useState(false);
   const [nidFileName, setNidFileName] = useState("");
 
-  // Common list of skills for suggestions
   const suggestedSkills = ["React", "Next.js", "Figma", "Design Systems", "IELTS Speaking", "Agile Product Management", "SQL", "Upwork Proposal"];
 
   useEffect(() => {
@@ -65,31 +66,64 @@ export default function OnboardingPage() {
     }
   };
 
+  const handleComplete = async () => {
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const payload = role === "learner"
+        ? { interests: learnerInterests, careerGoal: learnerGoal, targetHours: learnerHours }
+        : { skills: mentorSkills, hourlyRate: mentorRate, availabilityDays: mentorDays, linkedinUrl };
+
+      const res = await fetch("/api/auth/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Failed to save onboarding data.");
+        return;
+      }
+
+      localStorage.setItem("isOnboarded", "true");
+      router.push("/dashboard");
+    } catch {
+      setError("Network error. Please try again later.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleNextStep = () => {
+    setError("");
+
     if (role === "learner") {
       if (step === 1 && learnerInterests.length === 0) {
-        alert("Please select at least one interest to continue.");
+        setError("Please select at least one interest to continue.");
         return;
       }
       if (step === 2 && !learnerGoal) {
-        alert("Please select a target career goal to continue.");
+        setError("Please select a target career goal to continue.");
         return;
       }
       if (step === 3 && !learnerHours) {
-        alert("Please select your target learning target hours.");
+        setError("Please select your target learning hours.");
         return;
       }
     } else {
       if (step === 1 && mentorSkills.length === 0) {
-        alert("Please add at least one skill/expertise tag.");
+        setError("Please add at least one skill/expertise tag.");
         return;
       }
       if (step === 2 && (mentorRate < 500 || mentorDays.length === 0)) {
-        alert("Please select a valid rate (Min ৳500) and at least one available day.");
+        setError("Please select a valid rate (Min ৳500) and at least one available day.");
         return;
       }
-      if (step === 3 && (!linkedinUrl || !nidUploaded)) {
-        alert("Please provide your LinkedIn profile and upload NID/Passport for identity check.");
+      if (step === 3 && !linkedinUrl) {
+        setError("Please provide your LinkedIn profile URL.");
         return;
       }
     }
@@ -97,23 +131,20 @@ export default function OnboardingPage() {
     if (step < 3) {
       setStep(step + 1);
     } else {
-      // Completed Onboarding
-      localStorage.setItem("isOnboarded", "true");
-      // Redirect to dashboard
-      router.push("/dashboard");
+      handleComplete();
     }
   };
 
   const handlePrevStep = () => {
     if (step > 1) {
       setStep(step - 1);
+      setError("");
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 flex-1 flex items-center justify-center">
       <div className="max-w-xl w-full bg-card border border-border rounded-2xl shadow-xl p-8 relative overflow-hidden transition-all duration-300">
-        {/* Background glow decoration */}
         <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
 
         {/* Wizard Header Progress */}
@@ -125,7 +156,6 @@ export default function OnboardingPage() {
             <span className="text-xs font-semibold text-muted-foreground">Step {step} of 3</span>
           </div>
 
-          {/* Progress Bar */}
           <div className="w-full bg-accent rounded-full h-1.5 overflow-hidden">
             <div
               className="bg-primary h-full transition-all duration-300"
@@ -134,7 +164,14 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* ==================== LEARNER ONBOARDING FLOW ==================== */}
+        {/* Error */}
+        {error && (
+          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold text-center mb-6">
+            {error}
+          </div>
+        )}
+
+        {/* LEARNER ONBOARDING FLOW */}
         {role === "learner" && (
           <div className="space-y-6">
             {step === 1 && (
@@ -199,7 +236,7 @@ export default function OnboardingPage() {
             {step === 3 && (
               <div className="space-y-5 animate-fade-in">
                 <div className="space-y-1">
-                  <h2 className="text-xl font-bold">Set your target learning targets</h2>
+                  <h2 className="text-xl font-bold">Set your learning targets</h2>
                   <p className="text-xs text-muted-foreground">Select how many hours you plan to spend upskilling each week.</p>
                 </div>
                 <div className="grid grid-cols-1 gap-3">
@@ -229,7 +266,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* ==================== MENTOR ONBOARDING FLOW ==================== */}
+        {/* MENTOR ONBOARDING FLOW */}
         {role === "mentor" && (
           <div className="space-y-6">
             {step === 1 && (
@@ -239,7 +276,6 @@ export default function OnboardingPage() {
                   <p className="text-xs text-muted-foreground">Select common skills or type custom ones below.</p>
                 </div>
 
-                {/* Custom Skill Input Form */}
                 <form onSubmit={handleAddSkill} className="flex gap-2">
                   <input
                     type="text"
@@ -256,7 +292,6 @@ export default function OnboardingPage() {
                   </button>
                 </form>
 
-                {/* Suggestions List */}
                 <div className="space-y-2">
                   <p className="text-[10px] uppercase font-bold text-muted-foreground">Common Suggestions</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -273,7 +308,6 @@ export default function OnboardingPage() {
                   </div>
                 </div>
 
-                {/* Selected Skills Chips */}
                 {mentorSkills.length > 0 && (
                   <div className="space-y-2 border-t border-border pt-4">
                     <p className="text-[10px] uppercase font-bold text-muted-foreground">Your Selected Skills</p>
@@ -306,7 +340,6 @@ export default function OnboardingPage() {
                   <p className="text-xs text-muted-foreground">Set your hourly fee in BDT and choose your teaching days.</p>
                 </div>
 
-                {/* Fee Rate Input */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-foreground block">Hourly Consultation Rate (৳ BDT)</label>
                   <div className="flex items-center border border-input bg-background rounded-lg px-3 max-w-xs">
@@ -325,7 +358,6 @@ export default function OnboardingPage() {
                   <p className="text-[10px] text-muted-foreground">Platform average is ৳1,000 - ৳2,000 per hour.</p>
                 </div>
 
-                {/* Days Selection */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-foreground block">Weekly Available Days</label>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -358,22 +390,19 @@ export default function OnboardingPage() {
                   <p className="text-xs text-muted-foreground">Provide verified references to display the verified checkmark badge.</p>
                 </div>
 
-                {/* LinkedIn Profile */}
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-muted-foreground block">LinkedIn Profile Link</label>
                   <input
                     type="url"
                     placeholder="https://linkedin.com/in/yourprofile"
-                    required
                     value={linkedinUrl}
                     onChange={(e) => setLinkedinUrl(e.target.value)}
                     className="w-full text-xs p-2.5 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
-                {/* File Upload Selector */}
                 <div className="space-y-2">
-                  <label className="text-[10px] uppercase font-bold text-muted-foreground block">National ID (NID) / Passport Scan</label>
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground block">National ID (NID) / Passport Scan (Optional)</label>
                   <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-primary/50 transition-colors bg-background/50 relative cursor-pointer">
                     <input
                       type="file"
@@ -412,12 +441,13 @@ export default function OnboardingPage() {
           >
             Back
           </button>
-          
+
           <button
             onClick={handleNextStep}
-            className="px-6 h-10 flex items-center justify-center font-bold text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-md shadow-primary/10 hover:shadow-primary/25"
+            disabled={isLoading}
+            className="px-6 h-10 flex items-center justify-center font-bold text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-md shadow-primary/10 hover:shadow-primary/25 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {step === 3 ? "Complete Onboarding" : "Next Step"}
+            {isLoading ? "Saving..." : step === 3 ? "Complete Onboarding" : "Next Step"}
           </button>
         </div>
       </div>

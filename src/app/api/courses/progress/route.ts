@@ -1,28 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
-
-async function authenticate() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
-    return decoded.userId || null;
-  } catch {
-    return null;
-  }
-}
+import { authenticate, safeJsonParse } from "../../../../lib/auth";
 
 export async function GET(request: Request) {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -40,7 +23,7 @@ export async function GET(request: Request) {
     }
 
     const enrollment = await prisma.enrollment.findFirst({
-      where: { userId, courseId },
+      where: { userId: decoded.userId, courseId },
     });
 
     if (!enrollment) {
@@ -50,7 +33,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const completed = JSON.parse(enrollment.completedLessons);
+    const completed = safeJsonParse<string[]>(enrollment.completedLessons, []);
 
     return NextResponse.json({ completed });
   } catch (err) {
@@ -64,14 +47,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    const userId = decoded.userId;
     const { courseId, lessonId, completed } = await request.json();
 
     if (!courseId || !lessonId || completed === undefined) {
@@ -103,7 +87,17 @@ export async function POST(request: Request) {
       );
     }
 
-    let completedList: string[] = JSON.parse(enrollment.completedLessons);
+    const parsedLessons = safeJsonParse<Array<{ id?: string }>>(course.lessons, []);
+    const validLessonIds = parsedLessons.map((l) => l.id).filter(Boolean);
+
+    if (validLessonIds.length > 0 && !validLessonIds.includes(lessonId)) {
+      return NextResponse.json(
+        { error: "Invalid lessonId - lesson does not belong to this course" },
+        { status: 400 }
+      );
+    }
+
+    let completedList: string[] = safeJsonParse<string[]>(enrollment.completedLessons, []);
 
     if (completed) {
       if (!completedList.includes(lessonId)) {
@@ -120,9 +114,8 @@ export async function POST(request: Request) {
       },
     });
 
-    const parsedLessons = JSON.parse(course.lessons);
-    const totalLessons = Array.isArray(parsedLessons) ? parsedLessons.length : 1;
-    const progressPercent = Math.round((completedList.length / totalLessons) * 100);
+    const totalLessons = Math.max(parsedLessons.length, 1);
+    const progressPercent = Math.min(100, Math.round((completedList.length / totalLessons) * 100));
 
     return NextResponse.json({
       message: "Lesson status updated successfully",

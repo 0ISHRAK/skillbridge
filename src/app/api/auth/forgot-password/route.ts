@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
 import { sendEmail } from "../../../../lib/notifications";
+import { generateSecureToken } from "../../../../lib/auth";
 
 export async function POST(request: Request) {
   try {
@@ -14,17 +15,16 @@ export async function POST(request: Request) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: email.toLowerCase().trim() },
     });
 
     if (!user) {
-      // Return success messaging anyway to prevent account enumeration
       return NextResponse.json({
-        message: "If the email is registered, a password reset code will be generated.",
+        message: "If the email is registered, a password reset code will be sent.",
       });
     }
 
-    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetToken = generateSecureToken();
     const resetExpires = new Date(Date.now() + 3600000); // 1 hour expiration
 
     await prisma.user.update({
@@ -35,13 +35,12 @@ export async function POST(request: Request) {
       },
     });
 
-    // Send reset password email via Nodemailer SMTP
     try {
       await sendEmail(
         email,
-        "Skillbridge Password Reset Code / পাসওয়ার্ড রিসেট কোড",
+        "Skillbridge Password Reset Code / পাসওয়ার্ড রিসেট কোড",
         `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded-lg;">
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
           <h2 style="color: #1e3a8a; text-align: center;">Password Reset Request</h2>
           <p>Hi ${user.name},</p>
           <p>We received a request to reset your password. Use the verification code below to set a new password:</p>
@@ -59,8 +58,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      message: "Reset code generated successfully and dispatched.",
-      resetToken,
+      message: "If the email is registered, a password reset code will be sent.",
     });
   } catch (err) {
     console.error("Forgot password exception:", err);

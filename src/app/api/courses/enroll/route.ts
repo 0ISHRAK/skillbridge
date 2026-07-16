@@ -1,35 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
-
-async function authenticate() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
-    return decoded.userId || null;
-  } catch {
-    return null;
-  }
-}
+import { authenticate } from "../../../../lib/auth";
 
 export async function POST(request: Request) {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    const userId = decoded.userId;
     const { courseId } = await request.json();
+
     if (!courseId) {
       return NextResponse.json(
         { error: "courseId is required" },
@@ -48,14 +33,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if already enrolled
     const existing = await prisma.enrollment.findFirst({
       where: { userId, courseId },
     });
 
     if (existing) {
       return NextResponse.json(
-        { error: "You are already enrolled in this course / আপনি ইতিমধ্যে এই কোর্সে ভর্তি হয়েছেন" },
+        { error: "You are already enrolled in this course / আপনি ইতিমধ্যে এই কোর্সে ভর্তি হয়েছেন" },
         { status: 400 }
       );
     }
@@ -71,7 +55,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Convert BDT price to tokens: ৳100 BDT = 1 Token
+    // Active All-Access subscribers enroll for free
+    const isSubscribed =
+      user.subscriptionStatus === "active" &&
+      user.subscriptionExpiry != null &&
+      new Date(user.subscriptionExpiry) > new Date();
+
+    if (isSubscribed) {
+      await prisma.enrollment.create({
+        data: { userId, courseId, completedLessons: "[]" },
+      });
+      return NextResponse.json({
+        message: "Enrolled via All-Access subscription! / সাবস্ক্রিপশনের মাধ্যমে কোর্সে ভর্তি সম্পন্ন!",
+        requiredTokens: 0,
+        viaSubscription: true,
+      });
+    }
+
     const requiredTokens = Math.ceil(course.price / 100);
 
     if (user.tokenBalance < requiredTokens) {
@@ -81,7 +81,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Deduct and Enroll inside transaction
     await prisma.$transaction([
       prisma.user.update({
         where: { id: userId },
@@ -101,7 +100,7 @@ export async function POST(request: Request) {
     ]);
 
     return NextResponse.json({
-      message: "Successfully enrolled in course! / কোর্সে সফলভাবে ভর্তি সম্পন্ন হয়েছে!",
+      message: "Successfully enrolled in course! / কোর্সে সফলভাবে ভর্তি সম্পন্ন হয়েছে!",
       requiredTokens,
     });
   } catch (err) {

@@ -30,6 +30,18 @@ model User {
   availabilitySlots    String?   // JSON-stringified array
   isMentorApproved     Boolean   @default(false)
   targetHours          String?   // "Light", "Moderate", "Intense", etc.
+  interests            String?   // JSON-stringified array (learner interests)
+  careerGoal           String?
+  linkedinUrl          String?
+  isOnboarded          Boolean   @default(false)
+
+  // Subscription
+  subscriptionPlan     String?   // "all_access" | null
+  subscriptionStatus   String?   // "active" | "cancelled" | "expired"
+  subscriptionExpiry   DateTime? // end of current paid period
+
+  // Skill Exchange
+  skillsList           String    @default("[]") // JSON array of skills the user knows
 }
 
 model Course {
@@ -95,11 +107,36 @@ model Booking {
   createdAt  DateTime @default(now())
 }
 
+model SkillPost {
+  id               String   @id @default(uuid())
+  authorId         String
+  authorName       String
+  offeredSkill     String
+  recommendedSkill String
+  description      String?
+  tokenCost        Int      @default(5)
+  isOpen           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+}
+
+model SkillExchangeRequest {
+  id            String   @id @default(uuid())
+  postId        String
+  requesterId   String
+  requesterName String
+  type          String   // "barter" | "token"
+  offeredSkill  String?
+  message       String?
+  status        String   @default("pending") // "pending" | "accepted" | "rejected"
+  tokensSpent   Int      @default(0)
+  createdAt     DateTime @default(now())
+}
+
 model Payment {
   id           String   @id @default(uuid())
   userId       String
   amount       Int      // Amount in BDT
-  type         String   // "course_enrollment" | "consultation_booking" | "wallet_topup"
+  type         String   // "course_enrollment" | "consultation_booking" | "wallet_topup" | "subscription"
   status       String   // "success" | "failed" | "refunded"
   gatewayTxnId String   // Transaction ID (e.g. bKash/Nagad mock)
   createdAt    DateTime @default(now())

@@ -1,28 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
-
-async function authenticate() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
-    return decoded.userId || null;
-  } catch {
-    return null;
-  }
-}
+import { authenticate, safeJsonParse } from "../../../lib/auth";
 
 export async function GET() {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -30,7 +13,7 @@ export async function GET() {
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: decoded.userId },
     });
 
     if (!user) {
@@ -39,11 +22,6 @@ export async function GET() {
         { status: 404 }
       );
     }
-
-    // Parse JSON arrays safely
-    const skills = user.skills ? JSON.parse(user.skills) : [];
-    const availabilityDays = user.availabilityDays ? JSON.parse(user.availabilityDays) : [];
-    const availabilitySlots = user.availabilitySlots ? JSON.parse(user.availabilitySlots) : [];
 
     return NextResponse.json({
       profile: {
@@ -54,9 +32,9 @@ export async function GET() {
         avatarUrl: user.avatarUrl,
         bio: user.bio,
         hourlyRate: user.hourlyRate,
-        skills,
-        availabilityDays,
-        availabilitySlots,
+        skills: safeJsonParse(user.skills, []),
+        availabilityDays: safeJsonParse(user.availabilityDays, []),
+        availabilitySlots: safeJsonParse(user.availabilitySlots, []),
         isMentorApproved: user.isMentorApproved,
         targetHours: user.targetHours,
       },
@@ -72,8 +50,8 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -92,19 +70,67 @@ export async function PUT(request: Request) {
       targetHours,
     } = payload;
 
-    // Build update parameters
     const updateData: Record<string, string | number | boolean | null> = {};
-    if (name !== undefined) updateData.name = name;
+
+    if (name !== undefined) {
+      const trimmedName = String(name).trim();
+      if (trimmedName.length === 0 || trimmedName.length > 100) {
+        return NextResponse.json(
+          { error: "Name must be between 1 and 100 characters" },
+          { status: 400 }
+        );
+      }
+      updateData.name = trimmedName;
+    }
+
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
-    if (bio !== undefined) updateData.bio = bio;
-    if (hourlyRate !== undefined) updateData.hourlyRate = Number(hourlyRate);
-    if (skills !== undefined) updateData.skills = JSON.stringify(skills);
-    if (availabilityDays !== undefined) updateData.availabilityDays = JSON.stringify(availabilityDays);
-    if (availabilitySlots !== undefined) updateData.availabilitySlots = JSON.stringify(availabilitySlots);
-    if (targetHours !== undefined) updateData.targetHours = targetHours;
+    if (bio !== undefined) updateData.bio = String(bio).slice(0, 1000);
+
+    if (hourlyRate !== undefined) {
+      const rate = Number(hourlyRate);
+      if (isNaN(rate) || rate < 0) {
+        return NextResponse.json(
+          { error: "Hourly rate must be a positive number" },
+          { status: 400 }
+        );
+      }
+      updateData.hourlyRate = Math.round(rate);
+    }
+
+    if (skills !== undefined) {
+      if (!Array.isArray(skills)) {
+        return NextResponse.json(
+          { error: "Skills must be an array" },
+          { status: 400 }
+        );
+      }
+      updateData.skills = JSON.stringify(skills);
+    }
+
+    if (availabilityDays !== undefined) {
+      if (!Array.isArray(availabilityDays)) {
+        return NextResponse.json(
+          { error: "availabilityDays must be an array" },
+          { status: 400 }
+        );
+      }
+      updateData.availabilityDays = JSON.stringify(availabilityDays);
+    }
+
+    if (availabilitySlots !== undefined) {
+      if (!Array.isArray(availabilitySlots)) {
+        return NextResponse.json(
+          { error: "availabilitySlots must be an array" },
+          { status: 400 }
+        );
+      }
+      updateData.availabilitySlots = JSON.stringify(availabilitySlots);
+    }
+
+    if (targetHours !== undefined) updateData.targetHours = String(targetHours);
 
     const updatedUser = await prisma.user.update({
-      where: { id: userId },
+      where: { id: decoded.userId },
       data: updateData,
     });
 
@@ -118,9 +144,9 @@ export async function PUT(request: Request) {
         avatarUrl: updatedUser.avatarUrl,
         bio: updatedUser.bio,
         hourlyRate: updatedUser.hourlyRate,
-        skills: updatedUser.skills ? JSON.parse(updatedUser.skills) : [],
-        availabilityDays: updatedUser.availabilityDays ? JSON.parse(updatedUser.availabilityDays) : [],
-        availabilitySlots: updatedUser.availabilitySlots ? JSON.parse(updatedUser.availabilitySlots) : [],
+        skills: safeJsonParse(updatedUser.skills, []),
+        availabilityDays: safeJsonParse(updatedUser.availabilityDays, []),
+        availabilitySlots: safeJsonParse(updatedUser.availabilitySlots, []),
         isMentorApproved: updatedUser.isMentorApproved,
         targetHours: updatedUser.targetHours,
       },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -15,7 +15,9 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("dark"); // Default dark mode
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
 
   // Auth & Profile state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -67,6 +69,22 @@ export default function Navbar() {
     }
   }, [pathname]);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      if (currentY < 10) {
+        setIsVisible(true);
+      } else if (currentY < lastScrollY.current) {
+        setIsVisible(true);
+      } else {
+        setIsVisible(false);
+      }
+      lastScrollY.current = currentY;
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
@@ -78,19 +96,24 @@ export default function Navbar() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem("userEmail");
+    localStorage.removeItem("userName");
+    localStorage.removeItem("userRole");
     localStorage.removeItem("isEmailVerified");
     localStorage.removeItem("isOnboarded");
-    setIsLoggedIn(false);
+    localStorage.removeItem("tokenBalance");
+    localStorage.removeItem("mentorEarnings");
+    localStorage.removeItem("scheduledSessions");
     setIsProfileOpen(false);
-    router.push("/");
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    window.location.href = "/";
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/explore?search=${encodeURIComponent(searchQuery.trim())}`);
+      router.push(`/explore?q=${encodeURIComponent(searchQuery.trim())}`);
       setIsSearchOpen(false);
       setSearchQuery("");
     }
@@ -109,7 +132,7 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 w-full glass border-b border-border transition-all duration-300">
+    <nav className={`sticky top-0 z-50 w-full glass border-b border-border transition-all duration-300 ${isVisible ? "translate-y-0" : "-translate-y-full"}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo Section */}

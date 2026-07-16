@@ -6,58 +6,76 @@ import Link from "next/link";
 interface CourseMeta {
   id: string;
   title: string;
+  description: string;
   category: string;
   price: number;
   students: number;
-  lessons: number;
+  lessons: { id: string; title: string }[];
   published: boolean;
+  createdAt: string;
 }
 
 export default function MentorCoursesListPage() {
   const [courses, setCourses] = useState<CourseMeta[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const saved = localStorage.getItem("mentorCourses");
-    if (saved) {
-      setTimeout(() => setCourses(JSON.parse(saved)), 0);
-    } else {
-      const defaultCourses: CourseMeta[] = [
-        {
-          id: "mern-freelancing",
-          title: "MERN Stack Development for Freelancing",
-          category: "Software & Coding",
-          price: 2000,
-          students: 12,
-          lessons: 20,
-          published: true,
-        },
-        {
-          id: "figma-uiux-bootcamp",
-          title: "Advanced Dashboard UI/UX Design",
-          category: "UI/UX & Product Design",
-          price: 1500,
-          students: 0,
-          lessons: 10,
-          published: false,
-        }
-      ];
-      localStorage.setItem("mentorCourses", JSON.stringify(defaultCourses));
-      setTimeout(() => setCourses(defaultCourses), 0);
-    }
+    fetchCourses();
   }, []);
 
-  const handleTogglePublish = (id: string) => {
-    const updated = courses.map((c) => {
-      if (c.id === id) {
-        const nextState = !c.published;
-        alert(`Course is now ${nextState ? "Published" : "Unpublished"}!`);
-        return { ...c, published: nextState };
+  const fetchCourses = async () => {
+    try {
+      const res = await fetch("/api/mentor/courses");
+      if (res.ok) {
+        const data = await res.json();
+        setCourses(data.courses || []);
       }
-      return c;
-    });
-    setCourses(updated);
-    localStorage.setItem("mentorCourses", JSON.stringify(updated));
+    } catch (err) {
+      console.error("Failed to fetch courses:", err);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleTogglePublish = async (id: string, currentStatus: boolean) => {
+    try {
+      const res = await fetch(`/api/courses/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ published: !currentStatus }),
+      });
+      if (res.ok) {
+        setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, published: !currentStatus } : c)));
+      }
+    } catch (err) {
+      console.error("Failed to toggle publish:", err);
+    }
+  };
+
+  const handleDelete = async (id: string, title: string) => {
+    if (!confirm(`Delete course "${title}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/courses/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setCourses((prev) => prev.filter((c) => c.id !== id));
+      }
+    } catch (err) {
+      console.error("Failed to delete course:", err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-10 bg-muted rounded-xl w-1/3" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-56 bg-muted rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-scale-up">
@@ -88,12 +106,19 @@ export default function MentorCoursesListPage() {
                   <span className="px-2 py-0.5 rounded text-[9px] bg-primary/10 text-primary border border-primary/20 font-bold">
                     {course.category}
                   </span>
-                  <span className="text-[10px] text-muted-foreground font-semibold">৳{course.price.toLocaleString()} BDT</span>
+                  <div className="text-right">
+                    <span className="text-[10px] text-muted-foreground font-semibold">৳{course.price.toLocaleString()} BDT</span>
+                    {!course.published && (
+                      <span className="block text-[8px] text-red-500 font-bold mt-0.5">DRAFT</span>
+                    )}
+                  </div>
                 </div>
 
-                <h3 className="font-extrabold text-sm text-foreground hover:text-primary transition-colors">
+                <h3 className="font-extrabold text-sm text-foreground">
                   {course.title}
                 </h3>
+
+                <p className="text-[10px] text-muted-foreground line-clamp-2">{course.description}</p>
 
                 <div className="grid grid-cols-2 gap-3 text-xs bg-background/50 border border-border/40 p-3 rounded-xl">
                   <div>
@@ -102,15 +127,15 @@ export default function MentorCoursesListPage() {
                   </div>
                   <div>
                     <p className="text-[9px] text-muted-foreground font-bold uppercase">Lectures</p>
-                    <p className="font-semibold text-foreground mt-0.5">{course.lessons} videos</p>
+                    <p className="font-semibold text-foreground mt-0.5">{course.lessons.length} videos</p>
                   </div>
                 </div>
               </div>
 
-              {/* Action toggles */}
+              {/* Action buttons */}
               <div className="flex gap-3 mt-5 pt-4 border-t border-border/60">
                 <button
-                  onClick={() => handleTogglePublish(course.id)}
+                  onClick={() => handleTogglePublish(course.id, course.published)}
                   className={`flex-1 h-9 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
                     course.published
                       ? "border-amber-500/30 text-amber-500 hover:bg-amber-500/5"
@@ -119,12 +144,12 @@ export default function MentorCoursesListPage() {
                 >
                   {course.published ? "Unpublish" : "Publish"}
                 </button>
-                <Link
-                  href={`/dashboard/mentor/courses/edit?id=${course.id}`}
-                  className="flex-1 h-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-bold flex items-center justify-center shadow-md shadow-primary/10 cursor-pointer"
+                <button
+                  onClick={() => handleDelete(course.id, course.title)}
+                  className="h-9 px-3 rounded-lg border border-red-500/30 text-red-500 text-xs font-bold hover:bg-red-500/5 transition-colors cursor-pointer"
                 >
-                  Edit Syllabus
-                </Link>
+                  Delete
+                </button>
               </div>
             </div>
           ))}

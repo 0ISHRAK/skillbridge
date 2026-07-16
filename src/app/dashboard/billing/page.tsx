@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 interface Invoice {
   id: string;
@@ -11,9 +12,18 @@ interface Invoice {
   status: "paid" | "failed";
 }
 
+interface SubscriptionInfo {
+  plan: string | null;
+  status: string | null;
+  expiry: string | null;
+  isActive: boolean;
+}
+
 export default function BillingPage() {
   const [tokenBalance, setTokenBalance] = useState(30);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Local state for payment modal
   const [showCheckout, setShowCheckout] = useState(false);
@@ -51,6 +61,30 @@ export default function BillingPage() {
       setTimeout(() => setInvoices(defaultInvoices), 0);
     }
   }, []);
+
+  useEffect(() => {
+    fetch("/api/subscription/status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.subscription) setSubscription(data.subscription);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleCancelSubscription = async () => {
+    if (!confirm("Cancel your All-Access subscription? You keep access until the expiry date.")) return;
+    setIsCancelling(true);
+    try {
+      const res = await fetch("/api/subscription/cancel", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) setSubscription(data.subscription);
+      else alert(data.error || "Failed to cancel.");
+    } catch {
+      alert("Network error. Please try again.");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const handleOpenCheckout = (pack: { tokens: number; price: number }) => {
     setSelectedPack(pack);
@@ -117,6 +151,62 @@ export default function BillingPage() {
         <h1 className="text-2xl font-extrabold tracking-tight">Wallet & Billing Transactions</h1>
         <p className="text-xs text-muted-foreground">Recharge your token balance, view payment logs, and check invoices.</p>
       </div>
+
+      {/* Subscription Status Widget */}
+      {subscription !== null && (
+        <div className={`p-5 rounded-2xl border shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+          subscription.isActive
+            ? "bg-emerald-500/5 border-emerald-500/20"
+            : "bg-card border-border"
+        }`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 ${
+              subscription.isActive ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-muted border border-border"
+            }`}>
+              {subscription.isActive ? "✓" : "📋"}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-extrabold text-foreground">Course All-Access Pass</p>
+                {subscription.isActive && (
+                  <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                    Active
+                  </span>
+                )}
+                {subscription.status === "cancelled" && subscription.isActive && (
+                  <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                    Cancels at expiry
+                  </span>
+                )}
+              </div>
+              {subscription.isActive && subscription.expiry ? (
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Access expires: <span className="font-semibold text-foreground">{new Date(subscription.expiry).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</span>
+                </p>
+              ) : (
+                <p className="text-[10px] text-muted-foreground mt-0.5">Subscribe to unlock all courses for ৳799/month</p>
+              )}
+            </div>
+          </div>
+
+          {subscription.isActive && subscription.status === "active" ? (
+            <button
+              onClick={handleCancelSubscription}
+              disabled={isCancelling}
+              className="px-4 py-2 text-xs font-bold rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-all disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+            >
+              {isCancelling ? "Cancelling..." : "Cancel Subscription"}
+            </button>
+          ) : !subscription.isActive ? (
+            <Link
+              href="/pricing#subscription"
+              className="px-4 py-2 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-sm shrink-0"
+            >
+              Subscribe · ৳799/mo
+            </Link>
+          ) : null}
+        </div>
+      )}
 
       {/* Wallet Status Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">

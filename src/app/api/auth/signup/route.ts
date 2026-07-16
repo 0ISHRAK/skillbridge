@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
 import { sendEmail } from "../../../../lib/notifications";
+import { generateSecureToken } from "../../../../lib/auth";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
@@ -14,7 +15,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate email format and check for dummy addresses
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters / পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে" },
+        { status: 400 }
+      );
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return NextResponse.json(
@@ -23,15 +30,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const blacklistPrefixes = ["abc", "xyz", "test", "dummy", "example", "123", "1234", "asdf", "qwer"];
     const emailLower = email.toLowerCase().trim();
     const [localPart, domainPart] = emailLower.split("@");
 
+    const blacklistPrefixes = ["abc", "xyz", "test", "dummy", "example", "123", "1234", "asdf", "qwer"];
     if (
-      blacklistPrefixes.includes(localPart) || 
-      domainPart === "test.com" || 
-      domainPart === "example.com" || 
-      domainPart.length < 4 || 
+      blacklistPrefixes.includes(localPart) ||
+      domainPart === "test.com" ||
+      domainPart === "example.com" ||
+      domainPart.length < 4 ||
       !domainPart.includes(".")
     ) {
       return NextResponse.json(
@@ -48,22 +55,22 @@ export async function POST(request: Request) {
     }
 
     const existing = await prisma.user.findUnique({
-      where: { email },
+      where: { email: emailLower },
     });
 
     if (existing) {
       return NextResponse.json(
-        { error: "Email already exists / এই ইমেইল ইতিমধ্যে ব্যবহার করা হয়েছে" },
+        { error: "Email already exists / এই ইমেইল ইতিমধ্যে ব্যবহার করা হয়েছে" },
         { status: 400 }
       );
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationToken = generateSecureToken();
 
     const user = await prisma.user.create({
       data: {
-        email,
+        email: emailLower,
         password: hashedPassword,
         name,
         role,
@@ -73,10 +80,8 @@ export async function POST(request: Request) {
       },
     });
 
-    // Trigger Nodemailer asynchronously (non-blocking)
-    // This returns the HTTP signup response immediately without waiting for slow SMTP socket handshakes.
     sendEmail(
-      email,
+      emailLower,
       "Skillbridge Email Verification Code / ইমেইল ভেরিফিকেশন কোড",
       `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
@@ -96,9 +101,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      message: "Registration successful! Verification token sent.",
+      message: "Registration successful! Please check your email for the verification code.",
       userId: user.id,
-      verificationToken,
     });
   } catch (err) {
     console.error("Signup exception:", err);

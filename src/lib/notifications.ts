@@ -3,7 +3,6 @@ import nodemailer from "nodemailer";
 
 export async function createNotification(userId: string, title: string, content: string) {
   try {
-    // 1. Create in-app notification row
     const notification = await prisma.notification.create({
       data: {
         userId,
@@ -13,7 +12,6 @@ export async function createNotification(userId: string, title: string, content:
       },
     });
 
-    // 2. Resolve user email for simulated/genuine dispatch
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -25,6 +23,7 @@ export async function createNotification(userId: string, title: string, content:
     return notification;
   } catch (err) {
     console.error("Failed to create notification/email:", err);
+    return null;
   }
 }
 

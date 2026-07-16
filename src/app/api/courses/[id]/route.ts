@@ -1,23 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
-
-async function authenticate() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string; role?: string };
-    return decoded;
-  } catch {
-    return null;
-  }
-}
+import { authenticate, safeJsonParse } from "../../../../lib/auth";
 
 export async function GET(
   request: Request,
@@ -40,7 +23,7 @@ export async function GET(
     return NextResponse.json({
       course: {
         ...course,
-        lessons: JSON.parse(course.lessons),
+        lessons: safeJsonParse(course.lessons, []),
       },
     });
   } catch (err) {
@@ -89,12 +72,12 @@ export async function PUT(
     const { title, description, category, price, lessons, published } = payload;
 
     const updateData: Record<string, string | number | boolean | null> = {};
-    if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
-    if (category !== undefined) updateData.category = category;
-    if (price !== undefined) updateData.price = Number(price);
+    if (title !== undefined) updateData.title = String(title);
+    if (description !== undefined) updateData.description = String(description);
+    if (category !== undefined) updateData.category = String(category);
+    if (price !== undefined) updateData.price = Math.max(0, Number(price) || 0);
     if (lessons !== undefined) updateData.lessons = JSON.stringify(lessons);
-    if (published !== undefined) updateData.published = published;
+    if (published !== undefined) updateData.published = Boolean(published);
 
     const updatedCourse = await prisma.course.update({
       where: { id },
@@ -105,7 +88,7 @@ export async function PUT(
       message: "Course updated successfully",
       course: {
         ...updatedCourse,
-        lessons: JSON.parse(updatedCourse.lessons),
+        lessons: safeJsonParse(updatedCourse.lessons, []),
       },
     });
   } catch (err) {

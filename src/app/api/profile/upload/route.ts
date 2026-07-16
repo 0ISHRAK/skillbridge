@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { authenticate, validateFileUpload, sanitizeFilename } from "../../../../lib/auth";
 
 export async function POST(request: Request) {
   try {
+    const decoded = await authenticate();
+    if (!decoded) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
 
@@ -14,20 +23,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const validationError = validateFileUpload(file);
+    if (validationError) {
+      return NextResponse.json(
+        { error: validationError },
+        { status: 400 }
+      );
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Create uploads folder inside public directory if it doesn't exist
     const uploadDir = path.join(process.cwd(), "public", "uploads");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
+    await fs.promises.mkdir(uploadDir, { recursive: true });
 
-    // Generate unique name to prevent collisions
-    const uniqueFilename = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
+    const uniqueFilename = sanitizeFilename(file.name);
     const filePath = path.join(uploadDir, uniqueFilename);
 
-    // Write file binary buffer to disk
     await fs.promises.writeFile(filePath, buffer);
 
     const relativeUrl = `/uploads/${uniqueFilename}`;

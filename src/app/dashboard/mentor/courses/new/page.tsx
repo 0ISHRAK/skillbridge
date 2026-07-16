@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface NewLesson {
+  id: string;
   title: string;
   duration: string;
 }
@@ -12,27 +13,26 @@ interface NewLesson {
 export default function CreateCoursePage() {
   const router = useRouter();
 
-  // Form states
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Software & Coding");
   const [price, setPrice] = useState(1500);
-  
-  // Lessons list builder
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
   const [lessons, setLessons] = useState<NewLesson[]>([
-    { title: "Introduction & Overview", duration: "12:00" }
+    { id: "lesson-1", title: "Introduction & Overview", duration: "12:00" },
   ]);
   const [lessonTitleInput, setLessonTitleInput] = useState("");
   const [lessonDurationInput, setLessonDurationInput] = useState("10:00");
 
-  // Mock video states
-  const [videoFileUploaded, setVideoFileUploaded] = useState(false);
-  const [videoFileName, setVideoFileName] = useState("");
-
   const handleAddLesson = (e: React.FormEvent) => {
     e.preventDefault();
     if (lessonTitleInput.trim()) {
-      setLessons([...lessons, { title: lessonTitleInput, duration: lessonDurationInput }]);
+      setLessons([
+        ...lessons,
+        { id: `lesson-${Date.now()}`, title: lessonTitleInput, duration: lessonDurationInput },
+      ]);
       setLessonTitleInput("");
       setLessonDurationInput("10:00");
     }
@@ -42,38 +42,34 @@ export default function CreateCoursePage() {
     setLessons(lessons.filter((_, i) => i !== index));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setVideoFileUploaded(true);
-      setVideoFileName(e.target.files[0].name);
-    }
-  };
-
-  const handleCreateCourse = (e: React.FormEvent) => {
+  const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+
     if (!title || !description || lessons.length === 0) {
-      alert("Please fill in the course details and add at least one lesson.");
+      setError("Please fill in the course details and add at least one lesson.");
       return;
     }
 
-    const saved = localStorage.getItem("mentorCourses");
-    const coursesList = saved ? JSON.parse(saved) : [];
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/mentor/courses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description, category, price, lessons }),
+      });
 
-    const newCourse = {
-      id: `course-${Date.now()}`,
-      title,
-      category,
-      price: Number(price),
-      students: 0,
-      lessons: lessons.length,
-      published: true
-    };
-
-    coursesList.push(newCourse);
-    localStorage.setItem("mentorCourses", JSON.stringify(coursesList));
-
-    alert("Course created and published successfully!");
-    router.push("/dashboard/mentor/courses");
+      if (res.ok) {
+        router.push("/dashboard/mentor/courses");
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to create course");
+      }
+    } catch (err) {
+      setError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -90,6 +86,12 @@ export default function CreateCoursePage() {
             <h2 className="text-lg font-extrabold text-foreground">Course Configuration</h2>
             <p className="text-xs text-muted-foreground">Setup course title, BDT pricing, and curriculum syllabus.</p>
           </div>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold text-center">
+              {error}
+            </div>
+          )}
 
           {/* Title */}
           <div className="space-y-1">
@@ -130,11 +132,13 @@ export default function CreateCoursePage() {
                 <option>UI/UX & Product Design</option>
                 <option>IELTS & English</option>
                 <option>Freelancing & Career</option>
+                <option>Data Science & AI</option>
+                <option>Digital Marketing</option>
               </select>
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-muted-foreground block">BDT Price (৳ BDT)</label>
+              <label className="text-[10px] uppercase font-bold text-muted-foreground block">Price (৳ BDT)</label>
               <input
                 type="number"
                 min={0}
@@ -148,43 +152,13 @@ export default function CreateCoursePage() {
 
           <hr className="border-border/60" />
 
-          {/* Mock Video upload */}
-          <div className="space-y-2">
-            <label className="text-[10px] uppercase font-bold text-muted-foreground block">Course Intro Promo Video (Optional)</label>
-            <div className="border-2 border-dashed border-border rounded-xl p-5 text-center hover:border-primary/50 transition-colors bg-background/50 relative cursor-pointer">
-              <input
-                type="file"
-                accept="video/*"
-                onChange={handleFileUpload}
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-              />
-              <div className="space-y-1">
-                <span className="text-xl block">🎥</span>
-                {videoFileUploaded ? (
-                  <div>
-                    <p className="text-xs font-bold text-emerald-500">Video Added!</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{videoFileName}</p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-xs font-semibold">Select course intro video scan</p>
-                    <p className="text-[9px] text-muted-foreground mt-0.5">MP4, WebM (Max 50MB)</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <hr className="border-border/60" />
-
-          {/* Dynamic Lessons Builder checklist */}
+          {/* Dynamic Lessons Builder */}
           <div className="space-y-4">
             <div>
               <h3 className="text-xs font-extrabold uppercase tracking-wide">Curriculum Lessons</h3>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Configure modules and lessons detail lists.</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Configure modules and lessons for students.</p>
             </div>
 
-            {/* Input fields to append lessons */}
             <div className="flex gap-2 items-end">
               <div className="flex-1 space-y-1">
                 <label className="text-[9px] uppercase font-bold text-muted-foreground block">Lesson Title</label>
@@ -215,11 +189,10 @@ export default function CreateCoursePage() {
               </button>
             </div>
 
-            {/* Added list */}
             {lessons.length > 0 && (
               <div className="space-y-1.5 pt-2 max-h-48 overflow-y-auto border-t border-border/40">
                 {lessons.map((les, index) => (
-                  <div key={index} className="flex justify-between items-center p-2 rounded-lg border border-border bg-background/50 text-xs">
+                  <div key={les.id} className="flex justify-between items-center p-2 rounded-lg border border-border bg-background/50 text-xs">
                     <span className="font-medium text-foreground">{index + 1}. {les.title}</span>
                     <div className="flex items-center gap-3">
                       <span className="text-[10px] text-muted-foreground font-semibold">{les.duration}</span>
@@ -237,13 +210,14 @@ export default function CreateCoursePage() {
             )}
           </div>
 
-          {/* Submit Action */}
+          {/* Submit */}
           <div className="text-right pt-6 border-t border-border/60">
             <button
               type="submit"
-              className="px-6 h-10 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-md shadow-primary/20 cursor-pointer"
+              disabled={submitting}
+              className="px-6 h-10 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50"
             >
-              Publish Program
+              {submitting ? "Publishing..." : "Publish Course"}
             </button>
           </div>
         </form>

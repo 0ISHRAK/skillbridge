@@ -23,24 +23,22 @@ function AuthFormContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
 
-  // Form errors
+  // Form errors & loading
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Sync tab mode with query params change using primitive string dependencies
+  // Sync tab mode with query params change
   useEffect(() => {
     const targetMode = modeParam === "signup" ? "signup" : "login";
-    if (targetMode !== mode) {
-      setTimeout(() => setMode(targetMode), 0);
-    }
-  }, [modeParam, mode]);
+    setMode(targetMode);
+  }, [modeParam]);
 
-  // Sync role with query params change
+  // Sync role from URL only (e.g. /auth?mode=signup&role=mentor)
   useEffect(() => {
-    const targetRole = roleParam === "mentor" ? "mentor" : "learner";
-    if (targetRole !== role) {
-      setTimeout(() => setRole(targetRole), 0);
+    if (roleParam === "mentor") {
+      setRole("mentor");
     }
-  }, [roleParam, role]);
+  }, [roleParam]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,8 +58,8 @@ function AuthFormContent() {
         setError("Passwords do not match.");
         return;
       }
-      if (password.length < 6) {
-        setError("Password must be at least 6 characters long.");
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters long.");
         return;
       }
       if (!agreeTerms) {
@@ -69,12 +67,11 @@ function AuthFormContent() {
         return;
       }
 
+      setIsLoading(true);
       try {
         const res = await fetch("/api/auth/signup", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password, name, role }),
         });
 
@@ -85,23 +82,24 @@ function AuthFormContent() {
           return;
         }
 
-        // Store email locally for verify-email screen reference
+        // Clear any previous session before starting new verification
         localStorage.setItem("userEmail", email);
         localStorage.setItem("userName", name);
         localStorage.setItem("userRole", role);
-
-        // Redirect to verification
+        localStorage.removeItem("isEmailVerified");
+        await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
         router.push("/auth/verify-email");
       } catch {
         setError("Network error. Please try again later.");
+      } finally {
+        setIsLoading(false);
       }
     } else {
+      setIsLoading(true);
       try {
         const res = await fetch("/api/auth/login", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
 
@@ -112,15 +110,14 @@ function AuthFormContent() {
           return;
         }
 
-        // Store user state locally
         localStorage.setItem("userEmail", data.user.email);
         localStorage.setItem("userRole", data.user.role);
         localStorage.setItem("userName", data.user.name);
-
-        // Redirect to dashboard
         router.push("/dashboard");
       } catch {
         setError("Network error. Please try again later.");
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -288,7 +285,7 @@ function AuthFormContent() {
               </svg>
               <input
                 type="password"
-                placeholder="Minimum 6 characters"
+                placeholder="Minimum 8 characters"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -343,9 +340,12 @@ function AuthFormContent() {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full h-11 flex items-center justify-center font-bold text-xs rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-md shadow-primary/20 hover:shadow-primary/30 mt-4 active:scale-95 cursor-pointer"
+            disabled={isLoading}
+            className="w-full h-11 flex items-center justify-center font-bold text-xs rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-md shadow-primary/20 hover:shadow-primary/30 mt-4 active:scale-95 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {mode === "login" ? "Sign In" : "Register"}
+            {isLoading
+              ? (mode === "login" ? "Signing in..." : "Creating account...")
+              : (mode === "login" ? "Sign In" : "Register")}
           </button>
         </form>
 
@@ -362,23 +362,29 @@ function AuthFormContent() {
         {/* Social Authentication buttons */}
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => alert("Connecting to Google authentication...")}
-            className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all duration-200 cursor-pointer"
+            disabled
+            className="flex flex-col items-center justify-center gap-1 py-2.5 px-4 rounded-xl border border-border bg-background text-xs font-semibold text-muted-foreground opacity-50 cursor-not-allowed"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.113-5.136 4.113-3.398 0-6.16-2.762-6.16-6.16 0-3.397 2.762-6.16 6.16-6.16 1.77 0 3.37.75 4.5 1.968l3.158-3.158C19.167 2.146 15.938 1 12.24 1c-6.077 0-11 4.923-11 11s4.923 11 11 11c6.08 0 11-4.923 11-11 0-.742-.093-1.464-.26-2.155H12.24z" />
-            </svg>
-            Google
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.113-5.136 4.113-3.398 0-6.16-2.762-6.16-6.16 0-3.397 2.762-6.16 6.16-6.16 1.77 0 3.37.75 4.5 1.968l3.158-3.158C19.167 2.146 15.938 1 12.24 1c-6.077 0-11 4.923-11 11s4.923 11 11 11c6.08 0 11-4.923 11-11 0-.742-.093-1.464-.26-2.155H12.24z" />
+              </svg>
+              Google
+            </div>
+            <span className="text-[9px] text-muted-foreground/70">Coming Soon</span>
           </button>
-          
+
           <button
-            onClick={() => alert("Connecting to GitHub authentication...")}
-            className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all duration-200 cursor-pointer"
+            disabled
+            className="flex flex-col items-center justify-center gap-1 py-2.5 px-4 rounded-xl border border-border bg-background text-xs font-semibold text-muted-foreground opacity-50 cursor-not-allowed"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0012 2z" />
-            </svg>
-            GitHub
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0012 2z" />
+              </svg>
+              GitHub
+            </div>
+            <span className="text-[9px] text-muted-foreground/70">Coming Soon</span>
           </button>
         </div>
       </div>

@@ -13,6 +13,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (newPassword.length < 8) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters / পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে" },
+        { status: 400 }
+      );
+    }
+
     const user = await prisma.user.findFirst({
       where: {
         resetPasswordToken: token,
@@ -41,7 +48,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      message: "Password successfully updated! / পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে!",
+      message: "Password successfully updated! / পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে!",
     });
   } catch (err) {
     console.error("Reset password exception:", err);

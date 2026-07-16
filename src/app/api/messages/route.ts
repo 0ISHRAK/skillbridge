@@ -1,34 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
-
-async function authenticate() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
-    return decoded.userId || null;
-  } catch {
-    return null;
-  }
-}
+import { authenticate } from "../../../lib/auth";
 
 export async function GET(request: Request) {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    const userId = decoded.userId;
     const url = new URL(request.url);
     const counterpartyId = url.searchParams.get("userId");
 
@@ -39,7 +23,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // Get messages history
     const messages = await prisma.message.findMany({
       where: {
         OR: [
@@ -50,7 +33,6 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "asc" },
     });
 
-    // Mark incoming messages as read
     await prisma.message.updateMany({
       where: {
         senderId: counterpartyId,
@@ -74,14 +56,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    const userId = decoded.userId;
     const { receiverId, content } = await request.json();
 
     if (!receiverId || !content) {
@@ -91,11 +74,36 @@ export async function POST(request: Request) {
       );
     }
 
+    if (receiverId === userId) {
+      return NextResponse.json(
+        { error: "You cannot send a message to yourself" },
+        { status: 400 }
+      );
+    }
+
+    if (content.length > 5000) {
+      return NextResponse.json(
+        { error: "Message content exceeds maximum length of 5000 characters" },
+        { status: 400 }
+      );
+    }
+
+    const receiver = await prisma.user.findUnique({
+      where: { id: receiverId },
+    });
+
+    if (!receiver) {
+      return NextResponse.json(
+        { error: "Recipient not found" },
+        { status: 404 }
+      );
+    }
+
     const message = await prisma.message.create({
       data: {
         senderId: userId,
         receiverId,
-        content,
+        content: content.slice(0, 5000),
         read: false,
       },
     });

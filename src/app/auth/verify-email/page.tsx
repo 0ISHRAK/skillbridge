@@ -10,8 +10,9 @@ export default function VerifyEmailPage() {
   const [error, setError] = useState("");
   const [resendMessage, setResendMessage] = useState("");
   const [timer, setTimer] = useState(30);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
-  // Retrieve user email from localStorage
   useEffect(() => {
     const storedEmail = localStorage.getItem("userEmail");
     if (storedEmail && storedEmail !== "your email") {
@@ -19,7 +20,6 @@ export default function VerifyEmailPage() {
     }
   }, []);
 
-  // Timer countdown for resending email code
   useEffect(() => {
     if (timer > 0) {
       const interval = setInterval(() => setTimer(timer - 1), 1000);
@@ -36,13 +36,12 @@ export default function VerifyEmailPage() {
       return;
     }
 
+    setIsVerifying(true);
     try {
       const res = await fetch("/api/auth/verify-email", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ token: code }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: code, email }),
       });
 
       const data = await res.json();
@@ -52,28 +51,59 @@ export default function VerifyEmailPage() {
         return;
       }
 
+      if (data.user) {
+        localStorage.setItem("userEmail", data.user.email);
+        localStorage.setItem("userRole", data.user.role);
+        localStorage.setItem("userName", data.user.name);
+      }
       localStorage.setItem("isEmailVerified", "true");
       router.push("/auth/onboarding");
     } catch {
       setError("Network error. Please try again later.");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
-  const handleResend = () => {
-    if (timer > 0) return;
-    setResendMessage("Verification code resent successfully!");
-    setTimer(30);
-    setTimeout(() => setResendMessage(""), 4000);
+  const handleResend = async () => {
+    if (timer > 0 || isResending) return;
+
+    const targetEmail = email !== "your email" ? email : null;
+    if (!targetEmail) {
+      setError("Email not found. Please go back and sign up again.");
+      return;
+    }
+
+    setIsResending(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: targetEmail }),
+      });
+
+      if (res.ok) {
+        setResendMessage("Verification code resent successfully!");
+        setTimer(30);
+        setTimeout(() => setResendMessage(""), 4000);
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to resend code.");
+      }
+    } catch {
+      setError("Network error. Please try again later.");
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 flex-1 flex items-center justify-center">
       <div className="max-w-lg w-full bg-card border border-border rounded-2xl shadow-xl p-8 relative overflow-hidden transition-all duration-300">
-        {/* Background blur */}
         <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
 
         <div className="space-y-6">
-          {/* Header */}
           <div className="text-center space-y-1">
             <h2 className="text-2xl font-extrabold tracking-tight">Verify Your Email</h2>
             <p className="text-xs text-muted-foreground leading-normal">
@@ -83,13 +113,13 @@ export default function VerifyEmailPage() {
 
           {error && (
             <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold text-center">
-              ⚠️ {error}
+              {error}
             </div>
           )}
 
           {resendMessage && (
             <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-semibold text-center">
-              ✓ {resendMessage}
+              {resendMessage}
             </div>
           )}
 
@@ -111,13 +141,13 @@ export default function VerifyEmailPage() {
 
             <button
               type="submit"
-              className="w-full h-11 flex items-center justify-center font-bold text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-md shadow-primary/10"
+              disabled={isVerifying}
+              className="w-full h-11 flex items-center justify-center font-bold text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-md shadow-primary/10 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Verify Code & Continue
+              {isVerifying ? "Verifying..." : "Verify Code & Continue"}
             </button>
           </form>
 
-          {/* Resend Actions */}
           <div className="text-center text-xs">
             <span className="text-muted-foreground">Didn&apos;t receive the code? </span>
             {timer > 0 ? (
@@ -125,9 +155,10 @@ export default function VerifyEmailPage() {
             ) : (
               <button
                 onClick={handleResend}
-                className="text-primary font-bold hover:underline"
+                disabled={isResending}
+                className="text-primary font-bold hover:underline disabled:opacity-50"
               >
-                Resend Code
+                {isResending ? "Sending..." : "Resend Code"}
               </button>
             )}
           </div>

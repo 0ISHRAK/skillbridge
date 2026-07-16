@@ -1,23 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
-
-async function authenticate() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string; role?: string; name?: string };
-    return decoded;
-  } catch {
-    return null;
-  }
-}
+import { authenticate, safeJsonParse } from "../../../lib/auth";
 
 export async function GET(request: Request) {
   try {
@@ -57,7 +40,7 @@ export async function GET(request: Request) {
 
     const parsedCourses = courses.map((course) => ({
       ...course,
-      lessons: JSON.parse(course.lessons),
+      lessons: safeJsonParse(course.lessons, []),
     }));
 
     return NextResponse.json({ courses: parsedCourses });
@@ -95,9 +78,9 @@ export async function POST(request: Request) {
         title,
         description,
         category,
-        price: Number(price) || 0,
+        price: Math.max(0, Number(price) || 0),
         lessons: JSON.stringify(lessons),
-        mentorId: decoded.userId!,
+        mentorId: decoded.userId,
         mentorName: decoded.name || "Mentor Name",
       },
     });
@@ -106,7 +89,7 @@ export async function POST(request: Request) {
       message: "Course created successfully",
       course: {
         ...course,
-        lessons: JSON.parse(course.lessons),
+        lessons: safeJsonParse(course.lessons, []),
       },
     });
   } catch (err) {

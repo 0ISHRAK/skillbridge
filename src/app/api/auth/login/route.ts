@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
+import { getJwtSecret } from "../../../../lib/auth";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
 
 export async function POST(request: Request) {
   try {
@@ -18,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: email.toLowerCase().trim() },
     });
 
     if (!user) {
@@ -36,21 +35,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Sign token
+    if (!user.isEmailVerified) {
+      return NextResponse.json(
+        { error: "Please verify your email first / অনুগ্রহ করে প্রথমে আপনার ইমেইল যাচাই করুন" },
+        { status: 403 }
+      );
+    }
+
     const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
-      JWT_SECRET,
+      { userId: user.id, email: user.email, role: user.role, name: user.name },
+      getJwtSecret(),
       { expiresIn: "7d" }
     );
 
-    // Set cookie
     const cookieStore = await cookies();
     cookieStore.set("auth_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: 60 * 60 * 24 * 7,
     });
 
     return NextResponse.json({

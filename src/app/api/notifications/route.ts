@@ -1,29 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
 import { createNotification } from "../../../lib/notifications";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
-
-async function authenticate() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
-    return decoded.userId || null;
-  } catch {
-    return null;
-  }
-}
+import { authenticate } from "../../../lib/auth";
 
 export async function GET() {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -31,8 +14,9 @@ export async function GET() {
     }
 
     const notifications = await prisma.notification.findMany({
-      where: { userId },
+      where: { userId: decoded.userId },
       orderBy: { createdAt: "desc" },
+      take: 50,
     });
 
     return NextResponse.json({ notifications });
@@ -47,11 +31,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
+      );
+    }
+
+    if (decoded.role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden - Only admins can create notifications for other users" },
+        { status: 403 }
       );
     }
 
@@ -65,6 +56,13 @@ export async function POST(request: Request) {
     }
 
     const notification = await createNotification(targetUserId, title, content);
+
+    if (!notification) {
+      return NextResponse.json(
+        { error: "Failed to create notification" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       message: "Notification generated and dispatched",
@@ -81,14 +79,15 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const userId = await authenticate();
-    if (!userId) {
+    const decoded = await authenticate();
+    if (!decoded) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    const userId = decoded.userId;
     const { id, readAll } = await request.json();
 
     if (readAll) {
@@ -103,6 +102,17 @@ export async function PUT(request: Request) {
       return NextResponse.json(
         { error: "Notification id is required unless marking all read" },
         { status: 400 }
+      );
+    }
+
+    const notification = await prisma.notification.findFirst({
+      where: { id, userId },
+    });
+
+    if (!notification) {
+      return NextResponse.json(
+        { error: "Notification not found" },
+        { status: 404 }
       );
     }
 

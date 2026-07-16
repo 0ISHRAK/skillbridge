@@ -37,21 +37,31 @@ export default function DashboardLayout({
       return;
     }
 
-    setTimeout(() => {
-      if (storedName) setUserName(storedName);
-      setUserRole(storedRole);
-      setCheckingAuth(false);
-    }, 400);
+    if (storedName) setUserName(storedName);
+    setUserRole(storedRole);
+    setCheckingAuth(false);
   }, [pathname, router]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem("userEmail");
+    localStorage.removeItem("userName");
+    localStorage.removeItem("userRole");
     localStorage.removeItem("isEmailVerified");
     localStorage.removeItem("isOnboarded");
-    router.push("/");
+    localStorage.removeItem("tokenBalance");
+    localStorage.removeItem("mentorEarnings");
+    localStorage.removeItem("scheduledSessions");
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    window.location.href = "/";
   };
 
-  const menuItems = userRole === "mentor" ? [
+  const menuItems = userRole === "admin" ? [
+    { name: "Overview", href: "/dashboard", icon: "📊" },
+    { name: "Admin Panel", href: "/admin", icon: "🛡️" },
+    { name: "Messages", href: "/dashboard/messages", icon: "💬" },
+    { name: "Skill Exchange", href: "/dashboard/exchanges", icon: "🤝" },
+    { name: "Profile Settings", href: "/dashboard/settings", icon: "⚙️" },
+  ] : userRole === "mentor" ? [
     { name: "Overview", href: "/dashboard", icon: "📊" },
     { name: "My Courses", href: "/dashboard/mentor/courses", icon: "📚" },
     { name: "Set Availability", href: "/dashboard/mentor/availability", icon: "🕒" },
@@ -59,11 +69,13 @@ export default function DashboardLayout({
     { name: "Earnings & Payouts", href: "/dashboard/mentor/earnings", icon: "💸" },
     { name: "Reviews Received", href: "/dashboard/mentor/reviews", icon: "★" },
     { name: "Messages", href: "/dashboard/messages", icon: "💬" },
+    { name: "Skill Exchange", href: "/dashboard/exchanges", icon: "🤝" },
     { name: "Profile Settings", href: "/dashboard/settings", icon: "⚙️" },
   ] : [
     { name: "Overview", href: "/dashboard", icon: "📊" },
     { name: "My Courses", href: "/dashboard/courses", icon: "📚" },
     { name: "My Sessions", href: "/dashboard/sessions", icon: "📅" },
+    { name: "Skill Exchange", href: "/dashboard/exchanges", icon: "🤝" },
     { name: "Messages", href: "/dashboard/messages", icon: "💬" },
     { name: "Wallet & Invoices", href: "/dashboard/billing", icon: "💳" },
     { name: "Profile Settings", href: "/dashboard/settings", icon: "⚙️" },

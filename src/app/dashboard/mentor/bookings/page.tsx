@@ -5,106 +5,96 @@ import { useState, useEffect } from "react";
 interface BookingRequest {
   id: string;
   studentName: string;
-  studentLevel: string;
+  studentEmail: string;
   topic: string;
   date: string;
   time: string;
-  status: "pending" | "confirmed" | "rejected";
+  price: number;
+  status: string;
+  createdAt: string;
 }
 
 export default function ManageBookingsPage() {
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"pending" | "confirmed" | "rejected">("pending");
-
-  // State for rescheduling
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [newTime, setNewTime] = useState("");
 
   useEffect(() => {
-    const saved = localStorage.getItem("mentorBookingsList");
-    if (saved) {
-      setTimeout(() => setBookings(JSON.parse(saved)), 0);
-    } else {
-      const defaultBookings: BookingRequest[] = [
-        {
-          id: "req-1",
-          studentName: "Fahim Hossain",
-          studentLevel: "Intermediate",
-          topic: "Code review & Next.js debugging",
-          date: "2026-07-14",
-          time: "08:30 PM BDT",
-          status: "pending",
-        },
-        {
-          id: "req-2",
-          studentName: "Adnan Chowdhury",
-          studentLevel: "Beginner",
-          topic: "CSS Grid & Flexbox alignment issues",
-          date: "2026-07-16",
-          time: "02:30 PM BDT",
-          status: "pending",
-        }
-      ];
-      localStorage.setItem("mentorBookingsList", JSON.stringify(defaultBookings));
-      setTimeout(() => setBookings(defaultBookings), 0);
-    }
+    fetchBookings();
   }, []);
 
-  const handleAction = (id: string, action: "confirmed" | "rejected") => {
-    const updated = bookings.map((b) => {
-      if (b.id === id) {
-        return { ...b, status: action };
+  const fetchBookings = async () => {
+    try {
+      const res = await fetch("/api/mentor/bookings");
+      if (res.ok) {
+        const data = await res.json();
+        setBookings(data.bookings || []);
       }
-      return b;
-    });
-    setBookings(updated);
-    localStorage.setItem("mentorBookingsList", JSON.stringify(updated));
-
-    // If accepted, add to scheduledSessions list in localStorage so student sees it
-    if (action === "confirmed") {
-      const acceptedReq = bookings.find((b) => b.id === id);
-      if (acceptedReq) {
-        const savedSessions = localStorage.getItem("scheduledSessions");
-        const sessionsList = savedSessions ? JSON.parse(savedSessions) : [];
-        
-        // Avoid duplicate additions
-        if (!sessionsList.some((s: { id: string }) => s.id === id)) {
-          sessionsList.push({
-            id: acceptedReq.id,
-            mentorName: "Tanzim Hasan", // assume logged in mentor name
-            mentorRole: "Senior Developer",
-            mentorCompany: "TigerIT",
-            mentorAvatar: "👨‍💻",
-            date: acceptedReq.date,
-            time: acceptedReq.time,
-            status: "upcoming"
-          });
-          localStorage.setItem("scheduledSessions", JSON.stringify(sessionsList));
-        }
-      }
+    } catch (err) {
+      console.error("Failed to fetch bookings:", err);
+    } finally {
+      setLoading(false);
     }
-    alert(`Booking query successfully ${action}!`);
   };
 
-  const handleRescheduleSubmit = (e: React.FormEvent, id: string) => {
+  const handleAction = async (id: string, action: "confirmed" | "rejected") => {
+    setActionLoading(id);
+    try {
+      const res = await fetch("/api/mentor/bookings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: id, action }),
+      });
+      if (res.ok) {
+        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: action } : b)));
+      }
+    } catch (err) {
+      console.error("Failed to update booking:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRescheduleSubmit = async (e: React.FormEvent, id: string) => {
     e.preventDefault();
     if (!newTime) return;
 
-    const updated = bookings.map((b) => {
-      if (b.id === id) {
-        return { ...b, time: newTime };
+    setActionLoading(id);
+    try {
+      const res = await fetch("/api/mentor/bookings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: id, action: "reschedule", newTime }),
+      });
+      if (res.ok) {
+        setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, time: newTime } : b)));
+        setReschedulingId(null);
+        setNewTime("");
       }
-      return b;
-    });
-
-    setBookings(updated);
-    localStorage.setItem("mentorBookingsList", JSON.stringify(updated));
-    setReschedulingId(null);
-    setNewTime("");
-    alert("Tutoring session slot rescheduled successfully!");
+    } catch (err) {
+      console.error("Failed to reschedule:", err);
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const filtered = bookings.filter((b) => b.status === activeTab);
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-10 bg-muted rounded-xl w-1/3" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-48 bg-muted rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-scale-up">
@@ -117,6 +107,7 @@ export default function ManageBookingsPage() {
       {/* Tabs */}
       <div className="flex bg-muted/60 p-1.5 rounded-xl border border-border/40 select-none max-w-sm">
         {(["pending", "confirmed", "rejected"] as const).map((tab) => {
+          const count = bookings.filter((b) => b.status === tab).length;
           const isActive = activeTab === tab;
           return (
             <button
@@ -128,13 +119,13 @@ export default function ManageBookingsPage() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {tab}
+              {tab} {count > 0 && <span className="text-[9px] opacity-70">({count})</span>}
             </button>
           );
         })}
       </div>
 
-      {/* Requests Grid */}
+      {/* Bookings Grid */}
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {filtered.map((req) => (
@@ -146,15 +137,16 @@ export default function ManageBookingsPage() {
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
                     <span className="text-[9px] uppercase font-extrabold text-primary tracking-wider">
-                      Student: {req.studentName} ({req.studentLevel})
+                      Student: {req.studentName}
                     </span>
                     <h3 className="text-xs font-bold text-foreground">
                       Topic: {req.topic}
                     </h3>
                   </div>
+                  <span className="text-[10px] font-bold text-primary">৳{req.price.toLocaleString()}</span>
                 </div>
 
-                {/* Date & Time slots */}
+                {/* Date & Time */}
                 <div className="flex gap-4 text-xs bg-background/50 border border-border/40 p-3 rounded-xl">
                   <div>
                     <p className="text-[9px] text-muted-foreground font-bold uppercase">Date</p>
@@ -167,7 +159,7 @@ export default function ManageBookingsPage() {
                   </div>
                 </div>
 
-                {/* Reschedule selector sub-form */}
+                {/* Reschedule form */}
                 {reschedulingId === req.id && (
                   <form onSubmit={(e) => handleRescheduleSubmit(e, req.id)} className="space-y-2 border-t border-border/60 pt-4">
                     <label className="text-[9px] uppercase font-bold text-muted-foreground block">Select New Time Slot</label>
@@ -180,15 +172,24 @@ export default function ManageBookingsPage() {
                       >
                         <option value="">Choose timeslot...</option>
                         <option value="10:00 AM BDT">10:00 AM BDT</option>
+                        <option value="01:00 PM BDT">01:00 PM BDT</option>
                         <option value="02:30 PM BDT">02:30 PM BDT</option>
                         <option value="06:00 PM BDT">06:00 PM BDT</option>
                         <option value="08:30 PM BDT">08:30 PM BDT</option>
                       </select>
                       <button
                         type="submit"
-                        className="px-3 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:bg-primary/95 transition-all"
+                        disabled={actionLoading === req.id}
+                        className="px-3 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:bg-primary/95 transition-all disabled:opacity-50"
                       >
                         Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReschedulingId(null)}
+                        className="px-3 border border-border text-xs font-bold rounded-lg hover:bg-accent transition-all text-muted-foreground"
+                      >
+                        Cancel
                       </button>
                     </div>
                   </form>
@@ -200,7 +201,8 @@ export default function ManageBookingsPage() {
                 <div className="flex gap-3 mt-5 pt-4 border-t border-border/60">
                   <button
                     onClick={() => handleAction(req.id, "rejected")}
-                    className="flex-1 h-9 rounded-lg border border-border text-xs font-bold text-red-500 hover:bg-red-500/5 transition-colors cursor-pointer"
+                    disabled={actionLoading === req.id}
+                    className="flex-1 h-9 rounded-lg border border-border text-xs font-bold text-red-500 hover:bg-red-500/5 transition-colors cursor-pointer disabled:opacity-50"
                   >
                     Reject
                   </button>
@@ -212,9 +214,10 @@ export default function ManageBookingsPage() {
                   </button>
                   <button
                     onClick={() => handleAction(req.id, "confirmed")}
-                    className="flex-1 h-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-bold flex items-center justify-center shadow-md shadow-primary/10 cursor-pointer"
+                    disabled={actionLoading === req.id}
+                    className="flex-1 h-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-bold flex items-center justify-center shadow-md shadow-primary/10 cursor-pointer disabled:opacity-50"
                   >
-                    Accept
+                    {actionLoading === req.id ? "..." : "Accept"}
                   </button>
                 </div>
               )}

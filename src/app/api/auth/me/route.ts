@@ -1,35 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
+import { authenticate } from "../../../../lib/auth";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
+    const decoded = await authenticate();
 
-    if (!token) {
+    if (!decoded) {
       return NextResponse.json(
-        { error: "Unauthorized - No session token found" },
-        { status: 401 }
-      );
-    }
-
-    let decoded: { userId?: string } & jwt.JwtPayload;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET) as { userId?: string } & jwt.JwtPayload;
-    } catch {
-      return NextResponse.json(
-        { error: "Unauthorized - Invalid token" },
-        { status: 401 }
-      );
-    }
-
-    if (!decoded.userId) {
-      return NextResponse.json(
-        { error: "Unauthorized - Invalid token body" },
+        { error: "Unauthorized - No valid session" },
         { status: 401 }
       );
     }
@@ -45,6 +24,11 @@ export async function GET() {
       );
     }
 
+    const isSubscribed =
+      user.subscriptionStatus === "active" &&
+      user.subscriptionExpiry != null &&
+      new Date(user.subscriptionExpiry) > new Date();
+
     return NextResponse.json({
       user: {
         id: user.id,
@@ -53,6 +37,13 @@ export async function GET() {
         role: user.role,
         isEmailVerified: user.isEmailVerified,
         tokenBalance: user.tokenBalance,
+        skillsList: user.skillsList ?? "[]",
+        subscription: {
+          plan: user.subscriptionPlan ?? null,
+          status: user.subscriptionStatus ?? null,
+          expiry: user.subscriptionExpiry?.toISOString() ?? null,
+          isActive: isSubscribed,
+        },
       },
     });
   } catch (err) {

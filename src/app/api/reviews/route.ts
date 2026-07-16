@@ -1,29 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
-
-async function authenticate() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string; name?: string };
-    return decoded;
-  } catch {
-    return null;
-  }
-}
+import { authenticate } from "../../../lib/auth";
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const targetId = url.searchParams.get("targetId");
-    const type = url.searchParams.get("type"); // "course" | "mentor"
+    const type = url.searchParams.get("type");
 
     if (!targetId) {
       return NextResponse.json(
@@ -51,7 +34,7 @@ export async function GET(request: Request) {
 
     if (totalReviews > 0) {
       const sum = reviews.reduce((acc, curr) => acc + curr.rating, 0);
-      averageRating = Math.round((sum / totalReviews) * 10) / 10; // Round to 1 decimal place (e.g. 4.7)
+      averageRating = Math.round((sum / totalReviews) * 10) / 10;
     }
 
     return NextResponse.json({
@@ -88,7 +71,7 @@ export async function POST(request: Request) {
     }
 
     const parsedRating = Number(rating);
-    if (isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+    if (!Number.isInteger(parsedRating) || parsedRating < 1 || parsedRating > 5) {
       return NextResponse.json(
         { error: "Rating must be an integer between 1 and 5" },
         { status: 400 }
@@ -102,11 +85,26 @@ export async function POST(request: Request) {
       );
     }
 
+    const existingReview = await prisma.review.findFirst({
+      where: {
+        studentId: decoded.userId,
+        targetId,
+        type,
+      },
+    });
+
+    if (existingReview) {
+      return NextResponse.json(
+        { error: "You have already submitted a review for this item" },
+        { status: 400 }
+      );
+    }
+
     const review = await prisma.review.create({
       data: {
         rating: parsedRating,
-        comment,
-        studentId: decoded.userId!,
+        comment: comment.slice(0, 2000),
+        studentId: decoded.userId,
         studentName: decoded.name || "Student Name",
         targetId,
         type,

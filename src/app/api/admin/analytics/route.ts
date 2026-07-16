@@ -1,27 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key-123456";
-
-async function checkAdmin() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-
-  if (!token) return false;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string };
-    return decoded.role === "admin" || decoded.role === "mentor";
-  } catch {
-    return false;
-  }
-}
+import { authenticateAdmin } from "../../../../lib/auth";
 
 export async function GET() {
   try {
-    const isAdmin = await checkAdmin();
+    const isAdmin = await authenticateAdmin();
     if (!isAdmin) {
       return NextResponse.json(
         { error: "Unauthorized - Admin access required" },
@@ -29,19 +12,14 @@ export async function GET() {
       );
     }
 
-    // 1. Total User Counts & Role Breakdown
     const totalUsers = await prisma.user.count();
     const mentorsCount = await prisma.user.count({ where: { role: "mentor" } });
     const learnersCount = await prisma.user.count({ where: { role: "learner" } });
-
-    // 2. Courses count
     const totalCoursesCount = await prisma.course.count();
 
-    // 3. Financial calculations
     const enrollments = await prisma.enrollment.findMany();
     const courses = await prisma.course.findMany();
-    
-    // Map course price by courseId
+
     const coursePriceMap = new Map<string, number>();
     courses.forEach((c) => coursePriceMap.set(c.id, c.price));
 
@@ -52,9 +30,7 @@ export async function GET() {
     });
 
     const confirmedBookings = await prisma.booking.findMany({
-      where: {
-        status: "confirmed",
-      },
+      where: { status: "confirmed" },
     });
 
     let bookingRevenue = 0;
@@ -64,7 +40,6 @@ export async function GET() {
 
     const grossRevenue = courseRevenue + bookingRevenue;
 
-    // 4. Popular courses calculation
     const enrollmentCountsMap = new Map<string, number>();
     enrollments.forEach((e) => {
       const count = enrollmentCountsMap.get(e.courseId) || 0;
@@ -73,7 +48,7 @@ export async function GET() {
 
     const sortedCourseIds = Array.from(enrollmentCountsMap.entries())
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 3); // top 3
+      .slice(0, 3);
 
     const popularCourses = [];
     for (const [courseId, count] of sortedCourseIds) {
