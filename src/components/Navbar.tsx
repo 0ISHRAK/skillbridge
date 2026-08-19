@@ -260,12 +260,12 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo Section & Role Indicator */}
           <div className="flex items-center gap-3">
-            <Link href={isLoggedIn ? (userRole === "admin" ? "/admin" : userRole === "mentor" ? "/dashboard/mentor/courses" : "/dashboard") : "/"} className="flex items-center gap-2 group">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-primary to-secondary flex items-center justify-center text-white font-bold shadow-md shadow-primary/20 transform group-hover:scale-105 transition-transform">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
+            <Link href={isLoggedIn ? (userRole === "admin" ? "/admin" : userRole === "mentor" ? "/dashboard/mentor/courses" : "/dashboard") : "/"} className="flex items-center gap-2.5 group">
+              <img
+                src="/logo.png"
+                alt="SkillBridge Logo"
+                className="w-9 h-9 rounded-xl object-cover shadow-md shadow-primary/20 border border-primary/30 transform group-hover:scale-105 transition-transform"
+              />
               <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground to-primary/80">
                 Skill<span className="text-primary">bridge</span>
               </span>

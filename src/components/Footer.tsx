@@ -9,12 +9,12 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand Column */}
           <div className="space-y-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary to-secondary flex items-center justify-center text-white font-bold">
-                <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
+            <Link href="/" className="flex items-center gap-2.5">
+              <img
+                src="/logo.png"
+                alt="SkillBridge Logo"
+                className="w-8 h-8 rounded-xl object-cover border border-primary/30 shadow-xs"
+              />
               <span className="text-lg font-bold tracking-tight">
                 Skill<span className="text-primary">bridge</span>
               </span>
