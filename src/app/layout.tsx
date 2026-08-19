@@ -17,6 +17,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Skillbridge - Learn, Teach, and Share Skills",
   description: "A premium peer-to-peer mentorship and skill-sharing platform connecting curious learners with expert mentors.",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
