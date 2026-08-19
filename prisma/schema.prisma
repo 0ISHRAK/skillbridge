@@ -1,0 +1,246 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+model User {
+  id                 String             @id @default(uuid())
+  email              String             @unique
+  password           String
+  name               String
+  role               String             @default("learner") // learner, mentor, admin
+  avatar             String?
+  avatarUrl          String?
+  bio                String?
+  skills             String             @default("[]") // JSON stringified array of skill names/categories
+  headline           String?
+  hourlyRate         Int?               @default(0) // In BDT
+  experienceYears    Int?               @default(0)
+  languages          String             @default("[\"English\", \"Bengali\"]") // JSON string
+  rating             Float              @default(5.0)
+  reviewsCount       Int                @default(0)
+  isAvailable        Boolean            @default(true)
+  availabilitySlots  String             @default("[]") // JSON string of available time windows
+  interests          String?            // JSON array of learner interests
+  careerGoal         String?
+  targetHours        String?
+  isOnboarded        Boolean            @default(false)
+  availabilityDays   String?            // JSON array
+  linkedinUrl        String?
+  isMentorApproved   Boolean            @default(false)
+  mentorApplicationStatus String        @default("not_submitted") // not_submitted, pending, approved, rejected
+  isVerified         Boolean            @default(false)
+  verificationStatus String             @default("unverified") // unverified, pending, verified, rejected
+  verificationDoc    String?
+  tokenBalance       Int                @default(100) // Default starting tokens
+  subscriptionStatus String             @default("inactive") // inactive, active, cancelled, expired
+  subscriptionTier   String?            // null, pro_learner, mentor_plus, all_access
+  subscriptionPlan   String?            // alias for subscriptionTier
+  subscriptionExpiry DateTime?
+  verificationToken  String?            // for email verification
+  resetPasswordToken String?            // for password reset
+  resetPasswordExpires DateTime?
+  isEmailVerified    Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  courses            Course[]           @relation("MentorCourses")
+  enrollments        Enrollment[]
+  mentorBookings     Booking[]          @relation("MentorBookings")
+  learnerBookings    Booking[]          @relation("LearnerBookings")
+  reviewsReceived    Review[]           @relation("MentorReviews")
+  reviewsGiven       Review[]           @relation("LearnerReviews")
+  skillPosts         SkillPost[]
+  sentMessages       Message[]          @relation("SentMessages")
+  receivedMessages   Message[]          @relation("ReceivedMessages")
+  notifications      Notification[]
+  payments           Payment[]
+  sessions           Session[]
+  skillExchangesGiven SkillExchange[]   @relation("RequesterExchanges")
+  skillExchangesReceived SkillExchange[] @relation("ProviderExchanges")
+}
+
+model Course {
+  id             String       @id @default(uuid())
+  title          String
+  description    String
+  category       String
+  price          Int          @default(0) // In BDT
+  level          String       @default("Beginner") // Beginner, Intermediate, Advanced
+  duration       String?      // e.g. "4 Weeks", "10 Hours"
+  thumbnail      String?
+  whatYouLearn   String       @default("[]") // JSON array
+  requirements   String       @default("[]") // JSON array
+  published      Boolean      @default(false)
+  isApproved     Boolean      @default(false)
+  approvalStatus String       @default("pending") // pending, approved, rejected
+  lessons        String       @default("[]") // JSON array of lesson objects
+  mentorId       String
+  mentorName     String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  mentor         User         @relation("MentorCourses", fields: [mentorId], references: [id], onDelete: Cascade)
+  enrollments    Enrollment[]
+}
+
+model Enrollment {
+  id               String   @id @default(uuid())
+  userId           String
+  courseId         String
+  progress         Int      @default(0) // Percentage 0-100
+  completedLessons String   @default("[]") // JSON array of completed lesson IDs
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course           Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model Booking {
+  id          String    @id @default(uuid())
+  mentorId    String
+  mentorName  String?
+  studentId   String?
+  learnerId   String?
+  topic       String?
+  skillTitle  String?
+  date        String?
+  time        String?
+  sessionDate DateTime?
+  durationMin Int       @default(60)
+  status      String    @default("pending") // pending, confirmed, completed, cancelled, rejected, refunded
+  meetLink    String?
+  notes       String?
+  price       Int       @default(0) // In BDT
+  paidWith    String    @default("tokens") // tokens, bdt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  mentor      User?     @relation("MentorBookings", fields: [mentorId], references: [id], onDelete: Cascade)
+  learner     User?     @relation("LearnerBookings", fields: [learnerId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  mentorId    String?
+  learnerId   String?
+  studentId   String?
+  studentName String?
+  targetId    String?
+  type        String   @default("mentor") // mentor, course
+  rating      Int      @default(5)
+  comment     String
+  createdAt   DateTime @default(now())
+
+  mentor      User?    @relation("MentorReviews", fields: [mentorId], references: [id], onDelete: Cascade)
+  learner     User?    @relation("LearnerReviews", fields: [learnerId], references: [id], onDelete: Cascade)
+}
+
+model SkillPost {
+  id               String                 @id @default(uuid())
+  authorId         String?
+  authorName       String?
+  userId           String?
+  title            String?
+  offeredSkill     String?
+  recommendedSkill String?
+  description      String?
+  category         String?
+  type             String                 @default("offer") // offer (I can teach), request (I want to learn)
+  tags             String                 @default("[]") // JSON array of strings
+  tokenCost        Int                    @default(5)
+  isOpen           Boolean                @default(true)
+  status           String                 @default("open") // open, in_progress, closed
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  user             User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requests         SkillExchangeRequest[]
+}
+
+model SkillExchangeRequest {
+  id            String    @id @default(uuid())
+  postId        String
+  requesterId   String
+  requesterName String?
+  type          String    @default("barter") // barter, token
+  offeredSkill  String?
+  message       String?
+  status        String    @default("pending") // pending, accepted, rejected
+  tokensSpent   Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  post          SkillPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model SkillExchange {
+  id          String   @id @default(uuid())
+  requesterId String
+  providerId  String
+  offerSkill  String
+  demandSkill String
+  status      String   @default("pending") // pending, accepted, rejected, completed
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requester   User     @relation("RequesterExchanges", fields: [requesterId], references: [id], onDelete: Cascade)
+  provider    User     @relation("ProviderExchanges", fields: [providerId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  content   String
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id           String   @id @default(uuid())
+  userId       String
+  amount       Int // In BDT
+  type         String // subscription, token_topup, mentor_booking, course_enrollment
+  status       String   @default("pending") // pending, success, failed, refunded
+  gatewayTxnId String?
+  metadata     String? // JSON string containing extra details
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
