@@ -37,7 +37,7 @@ export default function AdminReportsPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<ReportUser[]>([]);
-  const [bookings, setBookings] = useState<ReportBooking[]>([]);
+  const [, setBookings] = useState<ReportBooking[]>([]);
 
   useEffect(() => {
     let isMounted = true;
