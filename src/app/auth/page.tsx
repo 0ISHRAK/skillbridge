@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -8,15 +8,17 @@ function AuthFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Extract search parameter values as primitive strings for reliable useEffect tracking
+  // Extract search parameter values
   const modeParam = searchParams?.get("mode");
   const roleParam = searchParams?.get("role");
 
-  // Tab State
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  // Mode is derived directly from URL query param
+  const mode: "login" | "signup" = modeParam === "signup" ? "signup" : "login";
   
   // Sign Up / Login Fields
-  const [role, setRole] = useState<"learner" | "mentor">("learner");
+  const [role, setRole] = useState<"learner" | "mentor">(
+    roleParam === "mentor" ? "mentor" : "learner"
+  );
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,19 +28,6 @@ function AuthFormContent() {
   // Form errors & loading
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  // Sync tab mode with query params change
-  useEffect(() => {
-    const targetMode = modeParam === "signup" ? "signup" : "login";
-    setMode(targetMode);
-  }, [modeParam]);
-
-  // Sync role from URL only (e.g. /auth?mode=signup&role=mentor)
-  useEffect(() => {
-    if (roleParam === "mentor") {
-      setRole("mentor");
-    }
-  }, [roleParam]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

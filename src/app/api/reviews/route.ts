@@ -87,7 +87,7 @@ export async function POST(request: Request) {
 
     const existingReview = await prisma.review.findFirst({
       where: {
-        studentId: decoded.userId,
+        learnerId: decoded.userId,
         targetId,
         type,
       },
@@ -104,12 +104,35 @@ export async function POST(request: Request) {
       data: {
         rating: parsedRating,
         comment: comment.slice(0, 2000),
-        studentId: decoded.userId,
+        learnerId: decoded.userId,
         studentName: decoded.name || "Student Name",
         targetId,
         type,
+        mentorId: type === "mentor" ? targetId : null,
       },
     });
+
+    // If review is for a mentor, compute real average rating and update mentor's user record
+    if (type === "mentor") {
+      const allMentorReviews = await prisma.review.findMany({
+        where: {
+          OR: [{ targetId }, { mentorId: targetId }],
+        },
+      });
+
+      const totalCount = allMentorReviews.length;
+      const avgScore = totalCount > 0
+        ? Number((allMentorReviews.reduce((sum, r) => sum + r.rating, 0) / totalCount).toFixed(2))
+        : 0;
+
+      await prisma.user.update({
+        where: { id: targetId },
+        data: {
+          rating: avgScore,
+          reviewsCount: totalCount,
+        },
+      });
+    }
 
     return NextResponse.json({
       message: "Review submitted successfully",

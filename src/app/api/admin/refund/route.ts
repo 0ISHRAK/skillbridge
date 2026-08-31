@@ -46,13 +46,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const refundTokens = Math.ceil(booking.price / 100);
+    const refundTokens = Math.max(1, Math.ceil(booking.price / 10));
 
-    await prisma.$transaction([
-      prisma.booking.update({
-        where: { id: bookingId },
-        data: { status: "refunded" },
-      }),
+    const student = await prisma.user.findUnique({
+      where: { id: studentUserId },
+      select: { tokenBalance: true },
+    });
+
+    const newBalance = (student?.tokenBalance ?? 0) + refundTokens;
+
+    const [updatedUser] = await prisma.$transaction([
       prisma.user.update({
         where: { id: studentUserId },
         data: {
@@ -60,13 +63,50 @@ export async function POST(request: Request) {
             increment: refundTokens,
           },
         },
+        select: { tokenBalance: true },
+      }),
+      prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: "refunded" },
+      }),
+      prisma.tokenTransaction.create({
+        data: {
+          userId: studentUserId,
+          amount: refundTokens,
+          type: "admin_adjustment",
+          title: `Refund for Booking: ${booking.topic}`,
+          description: `Admin processed refund of ${refundTokens} tokens for session on ${booking.date}.`,
+          referenceId: bookingId,
+          balanceAfter: newBalance,
+        },
+      }),
+      prisma.notification.create({
+        data: {
+          userId: studentUserId,
+          title: `🪙 +${refundTokens} Tokens Refunded`,
+          content: `Your session booking on "${booking.topic}" has been refunded by administration. ${refundTokens} tokens added to your wallet.`,
+          link: "/dashboard/billing",
+        },
       }),
     ]);
+
+    // If mentor is associated, notify mentor of cancellation/refund
+    if (booking.mentorId) {
+      await prisma.notification.create({
+        data: {
+          userId: booking.mentorId,
+          title: "ℹ️ Session Booking Cancelled & Refunded",
+          content: `The mentorship session on "${booking.topic}" scheduled for ${booking.date} has been refunded to the student.`,
+          link: "/dashboard/mentor/bookings",
+        },
+      });
+    }
 
     return NextResponse.json({
       message: "Refund processed successfully",
       bookingId,
       refundedTokens: refundTokens,
+      newBalance: updatedUser.tokenBalance,
     });
   } catch (err) {
     console.error("Admin Refund error:", err);

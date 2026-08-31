@@ -22,11 +22,12 @@ export default function Navbar() {
 
   // Auth & Profile state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("User");
+  const [userName, setUserName] = useState("Learner");
   const [userRole, setUserRole] = useState<"admin" | "mentor" | "learner">("learner");
-  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [tokenBalance, setTokenBalance] = useState(0);
 
-  // Real-time Notifications state
+  // Notification states
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
@@ -39,36 +40,40 @@ export default function Navbar() {
 
   // Sync auth state & theme
   useEffect(() => {
-    // Auth Check from Local Storage first for immediate UI
-    const storedEmail = localStorage.getItem("userEmail");
-    const storedName = localStorage.getItem("userName");
-    const storedRole = (localStorage.getItem("userRole") || "learner").toLowerCase() as "admin" | "mentor" | "learner";
-    const storedTokens = localStorage.getItem("tokenBalance");
-
-    if (storedEmail) {
-      setIsLoggedIn(true);
-      if (storedName) setUserName(storedName);
-      setUserRole(storedRole);
-      if (storedTokens) setTokenBalance(Number(storedTokens) || 0);
-    } else {
-      setIsLoggedIn(false);
-    }
+    let isMounted = true;
 
     // Verify session dynamically with /api/auth/me
     async function syncAuth() {
+      const storedEmail = localStorage.getItem("userEmail");
+      const storedName = localStorage.getItem("userName");
+      const storedRole = (localStorage.getItem("userRole") || "learner").toLowerCase() as "admin" | "mentor" | "learner";
+      const storedTokens = localStorage.getItem("tokenBalance");
+      const storedAvatar = localStorage.getItem("userAvatar");
+
+      if (storedEmail && isMounted) {
+        setIsLoggedIn(true);
+        if (storedName) setUserName(storedName);
+        setUserRole(storedRole);
+        if (storedAvatar) setUserAvatar(storedAvatar);
+        if (storedTokens) setTokenBalance(Number(storedTokens) || 0);
+      }
+
       try {
         const res = await fetch("/api/auth/me", { cache: "no-store" });
-        if (res.ok) {
+        if (res.ok && isMounted) {
           const data = await res.json();
           if (data.user) {
             setIsLoggedIn(true);
             setUserName(data.user.name || "User");
             const verifiedRole = (data.user.role || "learner").toLowerCase() as "admin" | "mentor" | "learner";
             setUserRole(verifiedRole);
+            const av = data.user.avatar || data.user.avatarUrl || null;
+            setUserAvatar(av);
             setTokenBalance(data.user.tokenBalance ?? 0);
             localStorage.setItem("userRole", verifiedRole);
             localStorage.setItem("userName", data.user.name);
             localStorage.setItem("userEmail", data.user.email);
+            if (av) localStorage.setItem("userAvatar", av);
             if (data.user.tokenBalance !== undefined) {
               localStorage.setItem("tokenBalance", String(data.user.tokenBalance));
             }
@@ -81,6 +86,12 @@ export default function Navbar() {
 
     void syncAuth();
 
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     // Theme Sync
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const initialTheme = savedTheme || "dark";
@@ -198,7 +209,8 @@ export default function Navbar() {
     if (!iso) return "";
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
-    const diffMin = Math.floor((Date.now() - d.getTime()) / 60000);
+    const nowMs = new Date().getTime();
+    const diffMin = Math.max(0, Math.floor((nowMs - d.getTime()) / 60000));
     if (diffMin < 1) return "Just now";
     if (diffMin < 60) return `${diffMin}m ago`;
     const diffHours = Math.floor(diffMin / 60);
@@ -218,7 +230,7 @@ export default function Navbar() {
 
     if (userRole === "admin") {
       return [
-        { name: "Admin Console", href: "/admin" },
+        { name: "Dashboard", href: "/admin" },
         { name: "Course Approvals", href: "/admin/courses" },
         { name: "Verify Mentors", href: "/admin/mentors" },
         { name: "User Directory", href: "/admin/users" },
@@ -229,8 +241,7 @@ export default function Navbar() {
 
     if (userRole === "mentor") {
       return [
-        { name: "Mentor Studio", href: "/dashboard/mentor/courses" },
-        { name: "+ Add Course", href: "/dashboard/mentor/courses/new" },
+        { name: "My Courses", href: "/dashboard/mentor/courses" },
         { name: "Student Bookings", href: "/dashboard/mentor/bookings" },
         { name: "Schedule & Slots", href: "/dashboard/mentor/availability" },
         { name: "Earnings", href: "/dashboard/mentor/earnings" },
@@ -240,11 +251,12 @@ export default function Navbar() {
 
     // Default Learner
     return [
-      { name: "Explore Courses", href: "/explore" },
-      { name: "My Learning", href: "/dashboard/courses" },
-      { name: "Skill Exchanges", href: "/dashboard/exchanges" },
-      { name: "Mentorship Sessions", href: "/dashboard/sessions" },
-      { name: "Token Wallet", href: "/dashboard/billing" },
+      { name: "Explore", href: "/explore" },
+      { name: "My Courses", href: "/dashboard/courses" },
+      { name: "Sessions", href: "/dashboard/sessions" },
+      { name: "Skill Exchange", href: "/dashboard/exchanges" },
+      { name: "Rewards Store", href: "/rewards" },
+      { name: "Wallet", href: "/dashboard/billing" },
     ];
   };
 
@@ -262,9 +274,9 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <Link href={isLoggedIn ? (userRole === "admin" ? "/admin" : userRole === "mentor" ? "/dashboard/mentor/courses" : "/dashboard") : "/"} className="flex items-center gap-2.5 group">
               <img
-                src="/logo.png"
-                alt="SkillBridge Logo"
-                className="w-9 h-9 rounded-xl object-cover shadow-md shadow-primary/20 border border-primary/30 transform group-hover:scale-105 transition-transform"
+                src="/logo.svg"
+                alt="SkillBridge"
+                className="w-9 h-9 transform group-hover:scale-105 transition-transform drop-shadow-md"
               />
               <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground to-primary/80">
                 Skill<span className="text-primary">bridge</span>
@@ -315,13 +327,13 @@ export default function Navbar() {
             {/* Quick Learner Token Badge */}
             {isLoggedIn && userRole === "learner" && tokenBalance !== null && (
               <Link
-                href="/dashboard/billing"
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold hover:bg-amber-500/20 transition-all"
-                title="Your Skill Tokens (Click to Top Up)"
+                href="/dashboard/rewards"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold hover:bg-amber-500/20 transition-all shadow-xs"
+                title="Learning Reward Tokens (Click to Visit Rewards Store)"
               >
                 <span>🪙</span>
                 <span>{tokenBalance}</span>
-                <span className="text-[10px] opacity-70">Tokens</span>
+                <span className="text-[10px] opacity-80">Rewards</span>
               </Link>
             )}
 
@@ -442,7 +454,7 @@ export default function Navbar() {
                       setIsProfileOpen(!isProfileOpen);
                       setIsNotifOpen(false);
                     }}
-                    className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs transition-colors ${
+                    className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs transition-colors overflow-hidden ${
                       userRole === "admin"
                         ? "bg-red-500/10 border-red-500/30 text-red-500 hover:border-red-500"
                         : userRole === "mentor"
@@ -450,7 +462,13 @@ export default function Navbar() {
                         : "bg-primary/10 border-primary/20 text-primary hover:border-primary/50"
                     }`}
                   >
-                    {userName.substring(0, 1).toUpperCase()}
+                    {userAvatar && userAvatar.startsWith("http") ? (
+                      <img src={userAvatar} alt="" className="w-full h-full object-cover" />
+                    ) : userAvatar ? (
+                      <span className="text-base leading-none">{userAvatar}</span>
+                    ) : (
+                      userName.substring(0, 1).toUpperCase()
+                    )}
                   </button>
 
                   {/* Profile Menu Dropdown Tailored to Role */}

@@ -42,10 +42,29 @@ export async function PUT(request: Request) {
     });
 
     if (action === "reject" && exchangeRequest.type === "token" && exchangeRequest.tokensSpent > 0) {
-      await prisma.user.update({
+      const requester = await prisma.user.findUnique({
         where: { id: exchangeRequest.requesterId },
-        data: { tokenBalance: { increment: exchangeRequest.tokensSpent } },
+        select: { tokenBalance: true },
       });
+      const newBal = (requester?.tokenBalance ?? 0) + exchangeRequest.tokensSpent;
+
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: exchangeRequest.requesterId },
+          data: { tokenBalance: { increment: exchangeRequest.tokensSpent } },
+        }),
+        prisma.tokenTransaction.create({
+          data: {
+            userId: exchangeRequest.requesterId,
+            amount: exchangeRequest.tokensSpent,
+            type: "skill_swap",
+            title: `Refund: Skill Exchange Request Declined`,
+            description: `Declined request for "${post.offeredSkill}". ${exchangeRequest.tokensSpent} tokens refunded.`,
+            referenceId: requestId,
+            balanceAfter: newBal,
+          },
+        }),
+      ]);
     }
 
     if (action === "accept") {

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 type SkillPost = {
   id: string;
@@ -49,13 +49,28 @@ const LEVEL_MAP: Record<string, string> = {
   "Digital Marketing": "Advanced",
 };
 
+function LoadingSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="p-5 rounded-xl bg-card border border-border animate-pulse">
+          <div className="h-3 bg-accent rounded w-1/3 mb-3" />
+          <div className="h-4 bg-accent rounded w-3/4 mb-2" />
+          <div className="h-3 bg-accent rounded w-full mb-1" />
+          <div className="h-3 bg-accent rounded w-2/3" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ExploreContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const initialSearch = searchParams?.get("q") || "";
   const initialCat = searchParams?.get("category") || "";
 
-  const [activeTab, setActiveTab] = useState<"courses" | "mentors" | "exchange">("courses");
+  const initialTab = (searchParams?.get("tab") as "courses" | "mentors" | "exchange") || "courses";
+  const [activeTab, setActiveTab] = useState<"courses" | "mentors" | "exchange">(initialTab);
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [selectedCategory, setSelectedCategory] = useState(initialCat);
   const [selectedLevel, setSelectedLevel] = useState("");
@@ -168,10 +183,35 @@ function ExploreContent() {
         mentor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         mentor.bio.toLowerCase().includes(searchQuery.toLowerCase()) ||
         mentor.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()));
+
       const matchesPrice = maxPrice >= (mentor.hourlyRate || 0);
-      return matchesSearch && matchesPrice;
+
+      const matchesCategory =
+        !selectedCategory ||
+        mentor.skills.some((s) => s.toLowerCase().includes(selectedCategory.toLowerCase())) ||
+        (selectedCategory === "Freelancing & Career" &&
+          (mentor.bio.toLowerCase().includes("freelance") ||
+            mentor.bio.toLowerCase().includes("remote") ||
+            mentor.bio.toLowerCase().includes("upwork") ||
+            mentor.skills.some((s) => s.toLowerCase().includes("upwork") || s.toLowerCase().includes("remote") || s.toLowerCase().includes("contract")))) ||
+        (selectedCategory === "Software & Coding" &&
+          mentor.skills.some((s) =>
+            ["react", "next", "node", "python", "backend", "full-stack", "system", "sql", "engineering"].some((k) =>
+              s.toLowerCase().includes(k)
+            )
+          )) ||
+        (selectedCategory === "UI/UX & Product Design" &&
+          mentor.skills.some((s) =>
+            ["figma", "design", "ui", "ux", "product", "prototype"].some((k) => s.toLowerCase().includes(k))
+          )) ||
+        (selectedCategory === "IELTS & Communication" &&
+          mentor.skills.some((s) =>
+            ["ielts", "english", "communication", "scholarship", "sop"].some((k) => s.toLowerCase().includes(k))
+          ));
+
+      return matchesSearch && matchesPrice && matchesCategory;
     });
-  }, [mentors, searchQuery, maxPrice]);
+  }, [mentors, searchQuery, maxPrice, selectedCategory]);
 
   const openRequestModal = (post: SkillPost) => {
     setRequestModal({ post });
@@ -216,19 +256,6 @@ function ExploreContent() {
     setSelectedLevel("");
     setMaxPrice(5000);
   };
-
-  const LoadingSkeleton = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="p-5 rounded-xl bg-card border border-border animate-pulse">
-          <div className="h-3 bg-accent rounded w-1/3 mb-3" />
-          <div className="h-4 bg-accent rounded w-3/4 mb-2" />
-          <div className="h-3 bg-accent rounded w-full mb-1" />
-          <div className="h-3 bg-accent rounded w-2/3" />
-        </div>
-      ))}
-    </div>
-  );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 flex flex-col">
@@ -423,7 +450,7 @@ function ExploreContent() {
                               <>
                                 <p className="text-[9px] text-muted-foreground">Course Fee</p>
                                 <p className="text-base font-extrabold text-primary">৳{course.price.toLocaleString()}</p>
-                                <p className="text-[9px] font-bold text-amber-500">or {Math.ceil(course.price / 100)} Tokens</p>
+                                <p className="text-[9px] font-bold text-amber-500">or {Math.ceil(course.price / 10)} Tokens</p>
                               </>
                             )}
                           </div>
@@ -603,15 +630,20 @@ function ExploreContent() {
                       <div className="border-t border-border/60 pt-4 flex items-center justify-between mt-4">
                         <div>
                           <p className="text-[9px] text-muted-foreground">Consultation Fee</p>
-                          <p className="text-base font-extrabold text-primary">
-                            ৳{(mentor.hourlyRate || 0).toLocaleString()}/hr
-                          </p>
+                          <div className="flex items-baseline gap-1.5">
+                            <p className="text-base font-extrabold text-primary">
+                              ৳{(mentor.hourlyRate || 0).toLocaleString()}/hr
+                            </p>
+                            <span className="text-[10px] font-bold text-amber-500">
+                              (or {Math.ceil((mentor.hourlyRate || 0) / 10)} 🪙)
+                            </span>
+                          </div>
                         </div>
                       </div>
 
                       <div className="mt-4">
                         <Link
-                          href="/dashboard/book"
+                          href={`/dashboard/book?mentor=${mentor.id}&mentorName=${encodeURIComponent(mentor.name)}`}
                           className="w-full h-9 flex items-center justify-center font-bold text-xs rounded-md bg-foreground text-background hover:bg-foreground/90 transition-all text-center"
                         >
                           Book a 1-on-1 Session

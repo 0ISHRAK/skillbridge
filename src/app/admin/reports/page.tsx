@@ -2,6 +2,30 @@
 
 import { useState, useEffect } from "react";
 
+interface ReportUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isEmailVerified: boolean;
+  createdAt: string;
+}
+
+interface ReportBooking {
+  id: string;
+  status: string;
+  price: number;
+  date: string;
+  createdAt: string;
+}
+
+interface ReportCourse {
+  id: string;
+  title: string;
+  price: number;
+  lessons?: { id: string; title: string }[];
+}
+
 interface ReportData {
   userGrowth: { total: number; thisMonth: number; lastMonth: number };
   courseStats: { total: number; avgPrice: number; totalLessons: number };
@@ -12,69 +36,75 @@ interface ReportData {
 export default function AdminReportsPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState<any[]>([]);
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [users, setUsers] = useState<ReportUser[]>([]);
+  const [bookings, setBookings] = useState<ReportBooking[]>([]);
 
   useEffect(() => {
-    fetchAll();
-  }, []);
+    let isMounted = true;
+    async function fetchAll() {
+      try {
+        const [analyticsRes, usersRes, bookingsRes, coursesRes] = await Promise.all([
+          fetch("/api/admin/analytics"),
+          fetch("/api/admin/users"),
+          fetch("/api/admin/bookings"),
+          fetch("/api/admin/courses"),
+        ]);
 
-  const fetchAll = async () => {
-    try {
-      const [analyticsRes, usersRes, bookingsRes, coursesRes] = await Promise.all([
-        fetch("/api/admin/analytics"),
-        fetch("/api/admin/users"),
-        fetch("/api/admin/bookings"),
-        fetch("/api/admin/courses"),
-      ]);
+        const analytics = analyticsRes.ok ? (await analyticsRes.json()).analytics : null;
+        const usersData: ReportUser[] = usersRes.ok ? (await usersRes.json()).users || [] : [];
+        const bookingsData: ReportBooking[] = bookingsRes.ok ? (await bookingsRes.json()).bookings || [] : [];
+        const coursesData: ReportCourse[] = coursesRes.ok ? (await coursesRes.json()).courses || [] : [];
 
-      const analytics = analyticsRes.ok ? (await analyticsRes.json()).analytics : null;
-      const usersData = usersRes.ok ? (await usersRes.json()).users || [] : [];
-      const bookingsData = bookingsRes.ok ? (await bookingsRes.json()).bookings || [] : [];
-      const coursesData = coursesRes.ok ? (await coursesRes.json()).courses || [] : [];
+        if (!isMounted) return;
 
-      setUsers(usersData);
-      setBookings(bookingsData);
+        setUsers(usersData);
+        setBookings(bookingsData);
 
-      const now = new Date();
-      const thisMonth = usersData.filter((u: any) => {
-        const d = new Date(u.createdAt);
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      }).length;
+        const now = new Date();
+        const thisMonth = usersData.filter((u) => {
+          const d = new Date(u.createdAt);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }).length;
 
-      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1);
-      const lastMonth = usersData.filter((u: any) => {
-        const d = new Date(u.createdAt);
-        return d.getMonth() === lastMonthDate.getMonth() && d.getFullYear() === lastMonthDate.getFullYear();
-      }).length;
+        const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1);
+        const lastMonth = usersData.filter((u) => {
+          const d = new Date(u.createdAt);
+          return d.getMonth() === lastMonthDate.getMonth() && d.getFullYear() === lastMonthDate.getFullYear();
+        }).length;
 
-      const totalLessons = coursesData.reduce((sum: number, c: any) => sum + (c.lessons?.length || 0), 0);
-      const avgPrice = coursesData.length > 0
-        ? Math.round(coursesData.reduce((sum: number, c: any) => sum + c.price, 0) / coursesData.length)
-        : 0;
+        const totalLessons = coursesData.reduce((sum: number, c) => sum + (c.lessons?.length || 0), 0);
+        const avgPrice = coursesData.length > 0
+          ? Math.round(coursesData.reduce((sum: number, c) => sum + c.price, 0) / coursesData.length)
+          : 0;
 
-      setData({
-        userGrowth: { total: usersData.length, thisMonth, lastMonth },
-        courseStats: { total: coursesData.length, avgPrice, totalLessons },
-        bookingStats: {
-          total: bookingsData.length,
-          confirmed: bookingsData.filter((b: any) => b.status === "confirmed").length,
-          pending: bookingsData.filter((b: any) => b.status === "pending").length,
-          refunded: bookingsData.filter((b: any) => b.status === "refunded").length,
-          disputed: bookingsData.filter((b: any) => b.status === "disputed").length,
-        },
-        revenueBreakdown: {
-          courses: analytics?.revenue?.courseEnrollments || 0,
-          bookings: analytics?.revenue?.consultationBookings || 0,
-          total: analytics?.revenue?.grossPlatformRevenue || 0,
-        },
-      });
-    } catch (err) {
-      console.error("Failed to fetch report data:", err);
-    } finally {
-      setLoading(false);
+        setData({
+          userGrowth: { total: usersData.length, thisMonth, lastMonth },
+          courseStats: { total: coursesData.length, avgPrice, totalLessons },
+          bookingStats: {
+            total: bookingsData.length,
+            confirmed: bookingsData.filter((b) => b.status === "confirmed").length,
+            pending: bookingsData.filter((b) => b.status === "pending").length,
+            refunded: bookingsData.filter((b) => b.status === "refunded").length,
+            disputed: bookingsData.filter((b) => b.status === "disputed").length,
+          },
+          revenueBreakdown: {
+            courses: analytics?.revenue?.courseEnrollments || 0,
+            bookings: analytics?.revenue?.consultationBookings || 0,
+            total: analytics?.revenue?.grossPlatformRevenue || 0,
+          },
+        });
+      } catch (err) {
+        console.error("Failed to fetch report data:", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     }
-  };
+
+    void fetchAll();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (loading) {
     return (

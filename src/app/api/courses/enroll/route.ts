@@ -109,6 +109,17 @@ export async function POST(request: Request) {
             },
           },
         }),
+        prisma.tokenTransaction.create({
+          data: {
+            userId,
+            amount: -requiredTokens,
+            type: "course_enrollment",
+            title: `Course Enrollment: ${course.title}`,
+            description: `Enrolled in course using ${requiredTokens} learning tokens.`,
+            referenceId: courseId,
+            balanceAfter: user.tokenBalance - requiredTokens,
+          },
+        }),
         prisma.enrollment.create({
           data: {
             userId,

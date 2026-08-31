@@ -14,17 +14,13 @@ export async function GET() {
     const user = await authenticate();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noCacheHeaders });
 
-    const role = user.role.toLowerCase();
-    const where = role === "mentor"
-      ? { id: { not: user.userId }, role: "learner" }
-      : role === "learner"
-        ? { id: { not: user.userId }, isMentorApproved: true, OR: [{ role: "mentor" }, { role: "MENTOR" }] }
-        : { id: { not: user.userId } };
-
     const recipients = await prisma.user.findMany({
-      where,
-      select: { id: true, name: true, role: true, avatarUrl: true },
-      orderBy: { name: "asc" },
+      where: {
+        id: { not: user.userId },
+      },
+      select: { id: true, name: true, role: true, avatarUrl: true, headline: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+      take: 50,
     });
 
     return NextResponse.json({ recipients }, { headers: noCacheHeaders });

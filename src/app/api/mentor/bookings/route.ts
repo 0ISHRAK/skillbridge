@@ -69,13 +69,31 @@ export async function PUT(request: Request) {
 
     const studentUserId = booking.studentId || booking.learnerId;
 
-    if (action === "confirmed" || action === "rejected") {
+    if (action === "completed") {
       await prisma.booking.update({
         where: { id: bookingId },
-        data: { status: action },
+        data: { status: "completed" },
       });
 
-      if (action === "confirmed" && studentUserId) {
+      if (studentUserId) {
+        const { createNotification } = await import("../../../../lib/notifications");
+        await createNotification(
+          studentUserId,
+          "🎉 Session Completed!",
+          `Your mentorship session on "${booking.topic || booking.skillTitle}" with ${user.name || "your mentor"} has finished. Thank you for learning with Skillbridge!`
+        );
+      }
+
+      return NextResponse.json({ message: "Booking marked as completed successfully" });
+    }
+
+    if (action === "confirmed") {
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: "confirmed" },
+      });
+
+      if (studentUserId) {
         const { createNotification } = await import("../../../../lib/notifications");
         await createNotification(
           studentUserId,
@@ -84,7 +102,52 @@ export async function PUT(request: Request) {
         );
       }
 
-      return NextResponse.json({ message: `Booking ${action} successfully` });
+      return NextResponse.json({ message: "Booking confirmed successfully" });
+    }
+
+    if (action === "rejected") {
+      const refundTokens = Math.max(1, Math.ceil((booking.price || 1000) / 10));
+
+      if (studentUserId) {
+        const student = await prisma.user.findUnique({ where: { id: studentUserId } });
+        const newBalance = (student?.tokenBalance ?? 0) + refundTokens;
+
+        await prisma.$transaction([
+          prisma.booking.update({
+            where: { id: bookingId },
+            data: { status: "rejected" },
+          }),
+          prisma.user.update({
+            where: { id: studentUserId },
+            data: { tokenBalance: { increment: refundTokens } },
+          }),
+          prisma.tokenTransaction.create({
+            data: {
+              userId: studentUserId,
+              amount: refundTokens,
+              type: "mentor_booking",
+              title: `Refund: Session Declined by Mentor`,
+              description: `Mentor declined session for "${booking.topic || booking.skillTitle}". ${refundTokens} tokens returned to your wallet.`,
+              referenceId: bookingId,
+              balanceAfter: newBalance,
+            },
+          }),
+        ]);
+
+        const { createNotification } = await import("../../../../lib/notifications");
+        await createNotification(
+          studentUserId,
+          "Booking Request Declined",
+          `Your session request on "${booking.topic || booking.skillTitle}" was declined by the mentor. ${refundTokens} tokens have been refunded to your wallet.`
+        );
+      } else {
+        await prisma.booking.update({
+          where: { id: bookingId },
+          data: { status: "rejected" },
+        });
+      }
+
+      return NextResponse.json({ message: "Booking rejected and tokens refunded successfully" });
     }
 
     if (action === "reschedule" && newTime) {

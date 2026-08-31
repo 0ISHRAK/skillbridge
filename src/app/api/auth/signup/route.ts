@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         role,
         isEmailVerified: false,
         verificationToken,
-        tokenBalance: role === "learner" ? 30 : 0,
+        tokenBalance: role === "learner" ? 25 : 0,
       },
     });
 

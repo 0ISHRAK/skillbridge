@@ -24,6 +24,15 @@ export function proxy(request: NextRequest) {
     const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
     const now = Date.now();
 
+    // Periodic cleanup of expired rate limit entries
+    if (rateLimitMap.size > 200) {
+      for (const [key, val] of rateLimitMap.entries()) {
+        if (now > val.resetTime) {
+          rateLimitMap.delete(key);
+        }
+      }
+    }
+
     if (!rateLimitMap.has(ip)) {
       rateLimitMap.set(ip, { count: 1, resetTime: now + WINDOW_MS });
     } else {

@@ -24,22 +24,25 @@ export default function AdminMentorsPage() {
   const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
 
   useEffect(() => {
-    fetchMentors();
-  }, []);
-
-  const fetchMentors = async () => {
-    try {
-      const res = await fetch("/api/admin/users");
-      if (res.ok) {
-        const data = await res.json();
-        setMentors((data.users || []).filter((u: Mentor) => u.role === "mentor"));
+    let isMounted = true;
+    async function loadMentors() {
+      try {
+        const res = await fetch("/api/admin/users");
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setMentors((data.users || []).filter((u: Mentor) => u.role === "mentor"));
+        }
+      } catch (err) {
+        console.error("Failed to fetch mentors:", err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    } catch (err) {
-      console.error("Failed to fetch mentors:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+    void loadMentors();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleVerify = async (mentorId: string, approve: boolean) => {
     setActionLoading(mentorId);

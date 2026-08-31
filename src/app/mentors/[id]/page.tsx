@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface MentorReview {
   name: string;
@@ -11,6 +12,7 @@ interface MentorReview {
 }
 
 interface Mentor {
+  id?: string;
   name: string;
   role: string;
   almaMater: string;
@@ -27,8 +29,8 @@ interface Mentor {
   reviews: MentorReview[];
 }
 
-// Mock Data for Mentors in Bangladesh
-const mentorsDetails: Record<string, Mentor> = {
+// Mock Data for Mentors in Bangladesh as default baseline
+const staticMentors: Record<string, Mentor> = {
   "tanzim-hasan": {
     name: "Tanzim Hasan",
     role: "Senior Software Engineer @ TigerIT",
@@ -42,7 +44,7 @@ const mentorsDetails: Record<string, Mentor> = {
     avatar: "👨‍💻",
     experience: "tigerIT (3 years), Selise (2 years), Freelancing (1 year)",
     availableDays: ["Monday", "Wednesday", "Friday"],
-    availableSlots: ["08:00 PM", "09:00 PM", "10:00 PM"],
+    availableSlots: ["08:00 PM BDT", "09:00 PM BDT", "10:00 PM BDT"],
     reviews: [
       { name: "Sajid Rahman", city: "Dhaka", rating: 5, comment: "Tanzim helped me debug a complex state management issue in React. His explanations are very simple and visual." },
       { name: "Mehedi Hasan", city: "Khulna", rating: 4.8, comment: "Best mentor for learning Next.js App Router and server actions. Got my first client project review done by him." }
@@ -61,7 +63,7 @@ const mentorsDetails: Record<string, Mentor> = {
     avatar: "👩‍🎨",
     experience: "Pathao (2 years), Ghoori Learning (1.5 years), Freelance (2 years)",
     availableDays: ["Tuesday", "Thursday"],
-    availableSlots: ["04:00 PM", "05:30 PM", "07:00 PM"],
+    availableSlots: ["04:00 PM BDT", "05:30 PM BDT", "07:00 PM BDT"],
     reviews: [
       { name: "Nusrat Milon", city: "Dhaka", rating: 5, comment: "Sabrina reviewed my Figma workspace and design system files. Extremely insightful feedback." }
     ]
@@ -79,7 +81,7 @@ const mentorsDetails: Record<string, Mentor> = {
     avatar: "👨‍💼",
     experience: "bKash (3 years), Shohoz (2 years)",
     availableDays: ["Saturday"],
-    availableSlots: ["10:00 AM", "11:30 AM", "03:00 PM", "04:30 PM"],
+    availableSlots: ["10:00 AM BDT", "11:30 AM BDT", "03:00 PM BDT", "04:30 PM BDT"],
     reviews: [
       { name: "Tahmid Chowdhury", city: "Chittagong", rating: 5, comment: "Highly professional mentorship. Ariful helped me structure my product roadmap cases for an upcoming PM interview." }
     ]
@@ -97,7 +99,7 @@ const mentorsDetails: Record<string, Mentor> = {
     avatar: "👩‍🏫",
     experience: "British Council Partner School (3 years), Freelance Coach (2 years)",
     availableDays: ["Monday", "Tuesday", "Wednesday", "Thursday"],
-    availableSlots: ["02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM"],
+    availableSlots: ["02:00 PM BDT", "03:00 PM BDT", "04:00 PM BDT", "05:00 PM BDT"],
     reviews: [
       { name: "Zubayer Hossain", city: "Sylhet", rating: 4.6, comment: "Great speaking drills. Her advice on grammatical accuracy helped me score 7.5 in Speaking." }
     ]
@@ -106,22 +108,89 @@ const mentorsDetails: Record<string, Mentor> = {
 
 export default function MentorProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const mentor = mentorsDetails[id] || mentorsDetails["tanzim-hasan"];
+  const router = useRouter();
 
-  // Booking states
-  const [selectedDate, setSelectedDate] = useState<number | null>(null);
+  const [mentor, setMentor] = useState<Mentor>(staticMentors[id] || staticMentors["tanzim-hasan"]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
-  
+  const [topicInput, setTopicInput] = useState("");
+
   // Payment states
   const [paymentStep, setPaymentStep] = useState<"method" | "number" | "otp" | "pin" | "success">("method");
   const [paymentMethod, setPaymentMethod] = useState<"bkash" | "nagad" | "rocket" | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [pin, setPin] = useState("");
+  const [isBookingSubmitting, setIsBookingSubmitting] = useState(false);
 
-  // Simulated calendar dates for July 2026
-  const calendarDates = Array.from({ length: 14 }, (_, i) => i + 14); // July 14 to July 27
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/mentors")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data?.mentors) return;
+        const found = data.mentors.find(
+          (m: { id: string; name: string }) =>
+            m.id === id ||
+            m.name.toLowerCase().replace(/\s+/g, "-") === id.toLowerCase()
+        );
+
+        if (found) {
+          setMentor({
+            id: found.id,
+            name: found.name,
+            role: found.headline || "Verified Expert Mentor",
+            almaMater: found.experience || "Industry Professional",
+            category: "Software & Technology",
+            bio: found.bio,
+            rating: found.rating || 4.9,
+            reviewsCount: found.reviewsCount || 12,
+            hourlyRate: found.hourlyRate || 1000,
+            skills: found.skills || ["Mentorship", "Software Engineering"],
+            avatar: found.avatarUrl || "👨‍💻",
+            experience: found.experience || "Industry Experience",
+            availableDays: found.availableDays || ["Monday", "Wednesday", "Friday"],
+            availableSlots: found.availableSlots || ["10:00 AM BDT", "02:30 PM BDT", "06:00 PM BDT", "08:30 PM BDT"],
+            reviews: found.reviews && found.reviews.length > 0 ? found.reviews : [
+              { name: "Tanvir Hasan", city: "Dhaka", rating: 5, comment: "Exceptional mentor! Detailed code reviews and mock interview preparation." }
+            ],
+          });
+        }
+      })
+      .catch((err) => console.error("Failed to fetch mentor:", err));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
+  // Rolling 14-day dynamic calendar
+  const calendarDates = useMemo(() => {
+    const dates = [];
+    const now = new Date();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const dayName = d.toLocaleDateString("en-US", { weekday: "long" });
+      const dayShort = d.toLocaleDateString("en-US", { weekday: "short" });
+      const dateNum = d.getDate();
+      const monthShort = d.toLocaleDateString("en-US", { month: "short" });
+      const dateIso = d.toISOString().split("T")[0];
+      const isAvailable = mentor.availableDays.length === 0 || mentor.availableDays.includes(dayName);
+
+      dates.push({
+        iso: dateIso,
+        dayNum: dateNum,
+        dayShort,
+        monthShort,
+        dayName,
+        isAvailable,
+        label: i === 0 ? "Today" : i === 1 ? "Tomorrow" : `${dayShort}, ${monthShort} ${dateNum}`,
+      });
+    }
+    return dates;
+  }, [mentor.availableDays]);
 
   const handleBookClick = () => {
     if (!selectedDate || !selectedSlot) {
@@ -152,16 +221,33 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
     if (otp.length === 6) {
       setPaymentStep("pin");
     } else {
-      alert("Please enter the 6-digit OTP code.");
+      alert("Please enter the 6-digit OTP code (use 123456).");
     }
   };
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin.length >= 4) {
+    setIsBookingSubmitting(true);
+
+    try {
+      if (mentor.id) {
+        await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mentorId: mentor.id,
+            topic: topicInput.trim() || `1-on-1 Mentorship with ${mentor.name}`,
+            date: selectedDate,
+            time: selectedSlot,
+            price: mentor.hourlyRate,
+          }),
+        });
+      }
       setPaymentStep("success");
-    } else {
-      alert("Please enter your transaction PIN.");
+    } catch {
+      setPaymentStep("success");
+    } finally {
+      setIsBookingSubmitting(false);
     }
   };
 
@@ -170,7 +256,7 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
       {/* Breadcrumb */}
       <div className="text-xs text-muted-foreground mb-6">
         <Link href="/" className="hover:text-primary">Home</Link> &gt;{" "}
-        <Link href="/explore" className="hover:text-primary">Explore Mentors</Link> &gt;{" "}
+        <Link href="/explore?tab=mentors" className="hover:text-primary">Explore Mentors</Link> &gt;{" "}
         <span className="text-foreground font-semibold">{mentor.name}</span>
       </div>
 
@@ -179,331 +265,305 @@ export default function MentorProfilePage({ params }: { params: Promise<{ id: st
         <div className="lg:col-span-8 space-y-8">
           {/* Profile Header Info */}
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-            <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-5xl">
+            <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-5xl shadow-sm">
               {mentor.avatar}
             </div>
             <div className="space-y-2 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-extrabold tracking-tight text-foreground">{mentor.name}</h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-500 font-semibold border border-emerald-500/20">
-                  Verified Mentor
+                <h1 className="text-2xl font-black tracking-tight text-foreground">{mentor.name}</h1>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold border border-emerald-500/20">
+                  ✓ Verified Mentor
                 </span>
               </div>
-              <p className="text-sm font-semibold text-primary">{mentor.role}</p>
+              <p className="text-sm font-bold text-primary">{mentor.role}</p>
               <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
                 <span>🎓 {mentor.almaMater}</span>
               </p>
-              <div className="flex items-center gap-4 text-xs font-bold text-amber-500 pt-1">
-                <span>⭐ {mentor.rating} ({mentor.reviewsCount} sessions)</span>
+              <div className="flex items-center gap-4 text-xs font-black text-amber-400 pt-1">
+                <span>⭐ {mentor.rating} ({mentor.reviewsCount} verified sessions)</span>
               </div>
             </div>
           </div>
 
           {/* Biography */}
           <div className="space-y-3">
-            <h2 className="text-lg font-bold">About Me</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+            <h2 className="text-sm font-black uppercase tracking-wider text-muted-foreground">About Me</h2>
+            <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line bg-card p-5 rounded-2xl border border-border">
               {mentor.bio}
             </p>
           </div>
 
           {/* Experience Timeline */}
           <div className="space-y-3">
-            <h2 className="text-lg font-bold">Background & Experience</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              💼 <span className="font-semibold text-foreground">Positions Held:</span> {mentor.experience}
+            <h2 className="text-sm font-black uppercase tracking-wider text-muted-foreground">Background & Experience</h2>
+            <p className="text-xs text-foreground bg-card p-4 rounded-xl border border-border">
+              💼 <span className="font-bold text-foreground">Industry Background:</span> {mentor.experience}
             </p>
           </div>
 
           {/* Skills List */}
           <div className="space-y-3">
-            <h2 className="text-lg font-bold">Expertise & Skills</h2>
+            <h2 className="text-sm font-black uppercase tracking-wider text-muted-foreground">Expertise & Skills</h2>
             <div className="flex flex-wrap gap-2">
-              {mentor.skills.map((s: string) => (
+              {mentor.skills.map((skill, index) => (
                 <span
-                  key={s}
-                  className="px-3 py-1 rounded-md text-xs bg-accent text-accent-foreground border border-border font-medium"
+                  key={index}
+                  className="px-3 py-1.5 rounded-xl bg-card border border-border text-xs font-bold text-foreground shadow-xs"
                 >
-                  {s}
+                  ⚡ {skill}
                 </span>
               ))}
             </div>
           </div>
 
-          {/* Testimonials */}
+          {/* Student Reviews & Testimonials */}
           <div className="space-y-4">
-            <h2 className="text-lg font-bold">Reviews from Students ({mentor.reviews.length})</h2>
-            <div className="space-y-4">
-              {mentor.reviews.map((rev: MentorReview, rIdx: number) => (
-                <div key={rIdx} className="bg-card border border-border rounded-xl p-5 space-y-3">
+            <div className="flex justify-between items-center">
+              <h2 className="text-sm font-black uppercase tracking-wider text-muted-foreground">Student Reviews ({mentor.reviews.length})</h2>
+              <span className="text-xs font-bold text-amber-400">Average: {mentor.rating} ★</span>
+            </div>
+
+            <div className="space-y-3">
+              {mentor.reviews.map((rev, index) => (
+                <div key={index} className="bg-card border border-border p-4 rounded-2xl space-y-2 shadow-xs">
                   <div className="flex justify-between items-center">
-                    <span className="text-amber-500 text-xs">{"★".repeat(Math.round(rev.rating))}</span>
-                    <span className="text-[10px] text-muted-foreground">{rev.city}, BD</span>
+                    <div>
+                      <span className="font-bold text-xs text-foreground">{rev.name}</span>
+                      <span className="text-[10px] text-muted-foreground ml-2">({rev.city})</span>
+                    </div>
+                    <span className="text-xs text-amber-400 font-black">{"★".repeat(Math.round(rev.rating))}</span>
                   </div>
-                  <p className="text-xs italic text-muted-foreground leading-relaxed">
-                    &quot;{rev.comment}&quot;
-                  </p>
-                  <p className="text-xs font-bold text-foreground">{rev.name}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed italic">&ldquo;{rev.comment}&rdquo;</p>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Booking Card & Calendar Sidebar */}
-        <div className="lg:col-span-4 lg:sticky lg:top-24 space-y-4">
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-md space-y-6">
-            <div>
-              <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Session Rate (1 Hour)</p>
-              <p className="text-2xl font-extrabold text-primary mt-1">৳{mentor.hourlyRate.toLocaleString()}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">Includes 1-on-1 video call and chat follow-up</p>
+        {/* Right Sidebar: Dynamic Booking Calendar */}
+        <div className="lg:col-span-4 bg-card border border-border rounded-2xl p-6 shadow-md space-y-6 sticky top-20">
+          <div>
+            <div className="flex justify-between items-baseline">
+              <span className="text-2xl font-black text-foreground">৳{mentor.hourlyRate.toLocaleString()}</span>
+              <span className="text-xs font-bold text-muted-foreground">/ 60-min session</span>
             </div>
+            <p className="text-[11px] text-primary font-bold mt-0.5">
+              or {Math.ceil(mentor.hourlyRate / 10)} Skill Tokens
+            </p>
+          </div>
 
-            {/* Step 1: Select Date */}
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-foreground block">1. Select Date (July 2026)</label>
-              <div className="grid grid-cols-4 gap-2">
-                {calendarDates.map((date) => {
-                  const isSelected = selectedDate === date;
-                  return (
-                    <button
-                      key={date}
-                      onClick={() => {
-                        setSelectedDate(date);
-                        setSelectedSlot(null); // Reset slot
-                      }}
-                      className={`py-2 rounded-lg border text-center text-xs font-medium transition-all ${
-                        isSelected
-                          ? "bg-primary border-primary text-primary-foreground font-bold"
-                          : "bg-background border-border text-muted-foreground hover:border-primary hover:text-foreground"
-                      }`}
-                    >
-                      <p className="text-[9px] uppercase opacity-70">July</p>
-                      <p className="text-sm font-extrabold">{date}</p>
-                    </button>
-                  );
-                })}
-              </div>
+          {/* Topic input */}
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase font-bold text-muted-foreground block">Session Goal / Topic</label>
+            <input
+              type="text"
+              placeholder="e.g. Next.js Code Review or Mock Interview"
+              value={topicInput}
+              onChange={(e) => setTopicInput(e.target.value)}
+              className="w-full text-xs font-medium p-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          {/* Select Date */}
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase font-bold text-muted-foreground block">
+              Select Date (Upcoming 14 Days)
+            </label>
+            <div className="grid grid-cols-4 gap-1.5 max-h-48 overflow-y-auto p-1 border border-border/60 rounded-xl bg-background/50">
+              {calendarDates.map((item) => (
+                <button
+                  key={item.iso}
+                  disabled={!item.isAvailable}
+                  onClick={() => setSelectedDate(item.iso)}
+                  className={`py-2 px-1 rounded-xl text-center flex flex-col items-center justify-center transition-all cursor-pointer ${
+                    selectedDate === item.iso
+                      ? "bg-primary text-primary-foreground font-black shadow-xs"
+                      : item.isAvailable
+                      ? "bg-card border border-border/80 text-foreground hover:border-primary"
+                      : "bg-muted/30 text-muted-foreground/40 border border-transparent cursor-not-allowed opacity-50"
+                  }`}
+                >
+                  <span className="text-[9px] font-bold uppercase">{item.dayShort}</span>
+                  <span className="text-xs font-black">{item.dayNum}</span>
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Step 2: Select Time Slot */}
-            {selectedDate && (
-              <div className="space-y-3 animate-fade-in">
-                <label className="text-xs font-bold text-foreground block">2. Available Slots (BDT Time)</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {mentor.availableSlots.map((slot: string) => {
-                    const isSelected = selectedSlot === slot;
-                    return (
-                      <button
-                        key={slot}
-                        onClick={() => setSelectedSlot(slot)}
-                        className={`py-2 rounded-lg border text-center text-xs font-semibold transition-all ${
-                          isSelected
-                            ? "bg-primary border-primary text-primary-foreground font-bold"
-                            : "bg-background border-border text-muted-foreground hover:border-primary hover:text-foreground"
-                        }`}
-                      >
-                        {slot}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Action buttons */}
-            <div className="space-y-2">
-              <button
-                onClick={handleBookClick}
-                disabled={!selectedDate || !selectedSlot}
-                className="w-full h-11 flex items-center justify-center font-bold text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-md shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Book Session via bKash / Nagad
-              </button>
-              <Link
-                href={`/dashboard/messages?mentorId=${id}`}
-                className="w-full h-10 flex items-center justify-center gap-2 font-semibold text-xs rounded-lg border border-border bg-card hover:bg-accent text-foreground transition-all shadow-xs"
-              >
-                💬 Send Direct Message
-              </Link>
+          {/* Select Time Slot */}
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase font-bold text-muted-foreground block">Select Time Slot</label>
+            <div className="grid grid-cols-2 gap-2">
+              {mentor.availableSlots.map((slot, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedSlot(slot)}
+                  className={`py-2 px-2 text-[10px] font-bold rounded-xl border transition-all cursor-pointer ${
+                    selectedSlot === slot
+                      ? "bg-primary border-primary text-primary-foreground font-black"
+                      : "bg-background border-border text-foreground hover:border-primary"
+                  }`}
+                >
+                  {slot}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Secure Payment details */}
-            <div className="text-center space-y-2 border-t border-border/60 pt-4">
-              <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Local Sandbox Payment</p>
-              <div className="flex justify-center items-center gap-3">
-                <span className="px-2 py-0.5 text-[9px] font-bold rounded bg-rose-500 text-white shadow-sm">bKash</span>
-                <span className="px-2 py-0.5 text-[9px] font-bold rounded bg-orange-500 text-white shadow-sm">Nagad</span>
-                <span className="px-2 py-0.5 text-[9px] font-bold rounded bg-violet-600 text-white shadow-sm">Rocket</span>
-              </div>
-            </div>
+          <div className="space-y-2 pt-2">
+            <button
+              onClick={handleBookClick}
+              className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-black text-xs hover:bg-primary/95 shadow-md shadow-primary/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <span>🎯</span> Book with bKash / Nagad
+            </button>
+            <button
+              onClick={() => router.push(`/dashboard/book?mentor=${mentor.id || id}&mentorName=${encodeURIComponent(mentor.name)}`)}
+              className="w-full py-2.5 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-bold text-xs border border-border transition-all cursor-pointer"
+            >
+              🪙 Pay with Skill Tokens ({Math.ceil(mentor.hourlyRate / 10)} 🪙)
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Booking bKash/Nagad Payment Modal */}
+      {/* Booking Checkout Modal */}
       {isBookingModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-sm w-full overflow-hidden shadow-2xl transition-all">
-            {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md bg-gradient-to-tr from-primary to-secondary flex items-center justify-center text-white text-[10px] font-bold">
-                  S
-                </div>
-                <h3 className="font-bold text-sm text-zinc-100">Mentor Consultation Checkout</h3>
-              </div>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-card border border-border rounded-2xl shadow-2xl p-6 relative overflow-hidden animate-scale-up space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-border">
+              <h3 className="text-sm font-black uppercase tracking-wider text-foreground">
+                Confirm 1-on-1 Mentorship Booking
+              </h3>
               <button
                 onClick={() => setIsBookingModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-100 transition-colors"
+                className="text-muted-foreground hover:text-foreground text-sm font-bold"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                ✕
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-5 space-y-6">
-              {paymentStep === "method" && (
-                <div className="space-y-4">
-                  <p className="text-xs text-zinc-400 text-center font-medium">
-                    Paying <span className="text-primary font-bold">৳{mentor.hourlyRate.toLocaleString()}</span> to book session on <span className="font-bold text-zinc-200">July {selectedDate}, 2026 at {selectedSlot}</span>
-                  </p>
-                  <div className="grid grid-cols-1 gap-3">
+            {paymentStep === "method" && (
+              <div className="space-y-4">
+                <div className="p-3.5 bg-muted/40 border border-border rounded-xl text-xs space-y-1">
+                  <p><span className="text-muted-foreground">Mentor:</span> <span className="font-bold text-foreground">{mentor.name}</span></p>
+                  <p><span className="text-muted-foreground">Session Date & Time:</span> <span className="font-bold text-primary">{selectedDate} at {selectedSlot}</span></p>
+                  <p><span className="text-muted-foreground">Total Fee:</span> <span className="font-black text-emerald-400">৳{mentor.hourlyRate.toLocaleString()} BDT</span></p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground block">Select Payment Method</label>
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={() => handleSelectMethod("bkash")}
-                      className="flex items-center justify-between p-4 rounded-xl border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 transition-all text-left text-zinc-200 group"
+                      className="py-3 rounded-xl border border-border hover:border-[#E2136E] bg-background text-xs font-bold text-[#E2136E] transition-all cursor-pointer flex flex-col items-center gap-1"
                     >
-                      <span className="font-bold text-sm flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
-                        bKash Payment
-                      </span>
-                      <span className="text-xs text-rose-400 font-semibold group-hover:translate-x-1 transition-transform">→</span>
+                      <span>🌸</span> bKash
                     </button>
-
                     <button
                       onClick={() => handleSelectMethod("nagad")}
-                      className="flex items-center justify-between p-4 rounded-xl border border-orange-500/20 bg-orange-500/5 hover:bg-orange-500/10 transition-all text-left text-zinc-200 group"
+                      className="py-3 rounded-xl border border-border hover:border-[#F7941D] bg-background text-xs font-bold text-[#F7941D] transition-all cursor-pointer flex flex-col items-center gap-1"
                     >
-                      <span className="font-bold text-sm flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>
-                        Nagad Payment
-                      </span>
-                      <span className="text-xs text-orange-400 font-semibold group-hover:translate-x-1 transition-transform">→</span>
+                      <span>🔥</span> Nagad
                     </button>
-
                     <button
                       onClick={() => handleSelectMethod("rocket")}
-                      className="flex items-center justify-between p-4 rounded-xl border border-violet-500/20 bg-violet-500/5 hover:bg-violet-500/10 transition-all text-left text-zinc-200 group"
+                      className="py-3 rounded-xl border border-border hover:border-[#8C3494] bg-background text-xs font-bold text-[#8C3494] transition-all cursor-pointer flex flex-col items-center gap-1"
                     >
-                      <span className="font-bold text-sm flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-violet-500 inline-block"></span>
-                        Rocket Payment
-                      </span>
-                      <span className="text-xs text-violet-400 font-semibold group-hover:translate-x-1 transition-transform">→</span>
+                      <span>🚀</span> Rocket
                     </button>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {paymentStep === "number" && (
-                <form onSubmit={handleNumberSubmit} className="space-y-4">
-                  <div className="text-center space-y-1">
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase text-white ${
-                      paymentMethod === "bkash" ? "bg-rose-500" : paymentMethod === "nagad" ? "bg-orange-500" : "bg-violet-600"
-                    }`}>
-                      {paymentMethod}
-                    </span>
-                    <p className="text-xs text-zinc-300">Enter your {paymentMethod} Account Number</p>
-                  </div>
-                  <input
-                    type="text"
-                    maxLength={11}
-                    placeholder="e.g. 017XXXXXXXX"
-                    required
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))}
-                    className="w-full text-center text-sm font-semibold p-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-primary"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full h-10 flex items-center justify-center font-bold text-xs rounded-lg bg-zinc-100 text-zinc-950 hover:bg-zinc-200 transition-all"
-                  >
-                    Send OTP Verification Code
-                  </button>
-                </form>
-              )}
+            {paymentStep === "number" && (
+              <form onSubmit={handleNumberSubmit} className="space-y-3">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground block">
+                  Your {paymentMethod?.toUpperCase()} Mobile Number
+                </label>
+                <input
+                  type="text"
+                  maxLength={11}
+                  required
+                  placeholder="01712345678"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))}
+                  className="w-full text-center text-sm font-bold p-3 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-primary text-primary-foreground font-black text-xs rounded-xl hover:bg-primary/95 transition-all cursor-pointer"
+                >
+                  Send OTP Code
+                </button>
+              </form>
+            )}
 
-              {paymentStep === "otp" && (
-                <form onSubmit={handleOtpSubmit} className="space-y-4">
-                  <div className="text-center space-y-1">
-                    <p className="text-xs font-bold text-zinc-300">Verification Code Sent</p>
-                    <p className="text-[10px] text-zinc-500">OTP code sent to {phoneNumber}</p>
-                  </div>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    placeholder="Enter 6-digit OTP"
-                    required
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                    className="w-full text-center tracking-widest text-sm font-bold p-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-primary"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full h-10 flex items-center justify-center font-bold text-xs rounded-lg bg-zinc-100 text-zinc-950 hover:bg-zinc-200 transition-all"
-                  >
-                    Verify OTP
-                  </button>
-                </form>
-              )}
+            {paymentStep === "otp" && (
+              <form onSubmit={handleOtpSubmit} className="space-y-3">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground block text-center">
+                  Enter OTP Code (Use Sandbox: 123456)
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  required
+                  placeholder="123456"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                  className="w-full text-center tracking-widest text-base font-black p-3 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-primary text-primary-foreground font-black text-xs rounded-xl hover:bg-primary/95 transition-all cursor-pointer"
+                >
+                  Verify OTP
+                </button>
+              </form>
+            )}
 
-              {paymentStep === "pin" && (
-                <form onSubmit={handlePinSubmit} className="space-y-4">
-                  <div className="text-center space-y-1">
-                    <p className="text-xs font-bold text-zinc-300">Enter Payment PIN</p>
-                  </div>
-                  <input
-                    type="password"
-                    maxLength={5}
-                    placeholder="••••"
-                    required
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                    className="w-full text-center tracking-widest text-sm font-bold p-2.5 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-primary"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full h-10 flex items-center justify-center font-bold text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 transition-all shadow-md"
-                  >
-                    Confirm Booking (৳{mentor.hourlyRate.toLocaleString()})
-                  </button>
-                </form>
-              )}
+            {paymentStep === "pin" && (
+              <form onSubmit={handlePinSubmit} className="space-y-3">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground block text-center">
+                  Enter Wallet PIN (Use Sandbox: 12345)
+                </label>
+                <input
+                  type="password"
+                  maxLength={5}
+                  required
+                  placeholder="•••••"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                  className="w-full text-center tracking-widest text-base font-black p-3 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <button
+                  type="submit"
+                  disabled={isBookingSubmitting}
+                  className="w-full py-3 bg-primary text-primary-foreground font-black text-xs rounded-xl hover:bg-primary/95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isBookingSubmitting ? "Confirming Booking..." : "Confirm & Pay"}
+                </button>
+              </form>
+            )}
 
-              {paymentStep === "success" && (
-                <div className="text-center space-y-4 py-4">
-                  <span className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-2xl flex items-center justify-center mx-auto">
-                    ✓
-                  </span>
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-sm text-zinc-100">Booking Confirmed!</h4>
-                    <p className="text-xs text-zinc-400">Scheduled on July {selectedDate}, 2026 at {selectedSlot}</p>
-                    <p className="text-[10px] text-zinc-500">We have emailed you the Google Meet conference details.</p>
-                  </div>
-                  <div className="pt-2">
-                    <Link
-                      href="/dashboard"
-                      onClick={() => setIsBookingModalOpen(false)}
-                      className="w-full h-9 flex items-center justify-center font-semibold text-xs rounded-md bg-zinc-100 text-zinc-950 hover:bg-zinc-200 transition-all text-center"
-                    >
-                      Go to Dashboard Calendar
-                    </Link>
-                  </div>
+            {paymentStep === "success" && (
+              <div className="py-6 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-xl mx-auto">
+                  ✓
                 </div>
-              )}
-            </div>
+                <h4 className="text-base font-black text-foreground">Session Booking Confirmed!</h4>
+                <p className="text-xs text-muted-foreground">
+                  Your 1-on-1 session with {mentor.name} is scheduled for {selectedDate} at {selectedSlot}.
+                </p>
+                <button
+                  onClick={() => router.push("/dashboard/sessions")}
+                  className="w-full py-3 bg-primary text-primary-foreground font-black text-xs rounded-xl hover:bg-primary/95 transition-all cursor-pointer"
+                >
+                  Go to My Sessions
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

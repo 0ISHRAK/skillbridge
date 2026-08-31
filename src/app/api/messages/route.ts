@@ -106,14 +106,31 @@ export async function POST(request: Request) {
       );
     }
 
-    const message = await prisma.message.create({
+    const [message, sender] = await Promise.all([
+      prisma.message.create({
+        data: {
+          senderId: userId,
+          receiverId,
+          content: content.slice(0, 5000),
+          read: false,
+        },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, role: true },
+      }),
+    ]);
+
+    // Send in-app notification to the recipient
+    const snippet = content.length > 60 ? `${content.slice(0, 60)}...` : content;
+    await prisma.notification.create({
       data: {
-        senderId: userId,
-        receiverId,
-        content: content.slice(0, 5000),
-        read: false,
+        userId: receiverId,
+        title: `💬 New message from ${sender?.name || "User"}`,
+        content: snippet,
+        link: `/dashboard/messages?userId=${userId}`,
       },
-    });
+    }).catch(() => {});
 
     return NextResponse.json(
       {

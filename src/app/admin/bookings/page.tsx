@@ -22,22 +22,25 @@ export default function AdminBookingsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchBookings();
-  }, []);
-
-  const fetchBookings = async () => {
-    try {
-      const res = await fetch("/api/admin/bookings");
-      if (res.ok) {
-        const data = await res.json();
-        setBookings(data.bookings || []);
+    let isMounted = true;
+    async function loadBookings() {
+      try {
+        const res = await fetch("/api/admin/bookings");
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setBookings(data.bookings || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch bookings:", err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    } catch (err) {
-      console.error("Failed to fetch bookings:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+    void loadBookings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleRefund = async (bookingId: string) => {
     if (!confirm("Are you sure you want to refund this booking? Tokens will be returned to the student.")) return;

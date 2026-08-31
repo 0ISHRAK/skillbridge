@@ -82,6 +82,28 @@ export default function CreateCoursePage() {
     setLessons(lessons.filter((_, i) => i !== index));
   };
 
+  const handleMoveUpLesson = (index: number) => {
+    if (index <= 0) return;
+    setLessons((prev) => {
+      const copy = [...prev];
+      const temp = copy[index - 1];
+      copy[index - 1] = copy[index];
+      copy[index] = temp;
+      return copy;
+    });
+  };
+
+  const handleMoveDownLesson = (index: number) => {
+    setLessons((prev) => {
+      if (index >= prev.length - 1) return prev;
+      const copy = [...prev];
+      const temp = copy[index + 1];
+      copy[index + 1] = copy[index];
+      copy[index] = temp;
+      return copy;
+    });
+  };
+
   const handleFileUpload = async (file: File) => {
     try {
       const uploadData = new FormData();
@@ -409,16 +431,35 @@ export default function CreateCoursePage() {
             </div>
 
             {lessons.length > 0 && (
-              <div className="space-y-1.5 pt-2 max-h-48 overflow-y-auto border-t border-border/40">
+              <div className="space-y-1.5 pt-2 max-h-56 overflow-y-auto border-t border-border/40">
                 {lessons.map((les, index) => (
                   <div key={les.id} className="flex justify-between items-center p-2.5 rounded-lg border border-border bg-background/50 text-xs">
-                    <span className="font-medium text-foreground">{index + 1}. {les.title}</span>
-                    <div className="flex items-center gap-3">
+                    <span className="font-medium text-foreground truncate pr-2">{index + 1}. {les.title}</span>
+                    <div className="flex items-center gap-2 shrink-0">
                       <span className="text-[10px] text-muted-foreground font-semibold">{les.duration}</span>
                       <button
                         type="button"
+                        disabled={index === 0}
+                        onClick={() => handleMoveUpLesson(index)}
+                        className="px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground text-[10px] font-bold disabled:opacity-30 cursor-pointer"
+                        title="Move Up"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === lessons.length - 1}
+                        onClick={() => handleMoveDownLesson(index)}
+                        className="px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-foreground text-[10px] font-bold disabled:opacity-30 cursor-pointer"
+                        title="Move Down"
+                      >
+                        ▼
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleRemoveLesson(index)}
-                        className="text-red-500 hover:text-red-700 text-sm font-bold cursor-pointer"
+                        className="text-red-500 hover:text-red-700 text-sm font-bold px-1 cursor-pointer"
+                        title="Remove Lesson"
                       >
                         ×
                       </button>

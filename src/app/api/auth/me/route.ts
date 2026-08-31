@@ -35,6 +35,8 @@ export async function GET() {
         email: user.email,
         name: user.name,
         role: user.role.toLowerCase(),
+        avatar: user.avatar || null,
+        avatarUrl: user.avatarUrl || null,
         isEmailVerified: user.isEmailVerified,
         isMentorApproved: user.isMentorApproved,
         mentorApplicationStatus: user.mentorApplicationStatus,

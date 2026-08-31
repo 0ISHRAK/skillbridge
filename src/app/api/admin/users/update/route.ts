@@ -32,7 +32,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    const data: Record<string, any> = {};
+    const data: Record<string, string | number | boolean> = {};
 
     if (updates.role && ["learner", "mentor", "admin"].includes(updates.role)) {
       data.role = updates.role;

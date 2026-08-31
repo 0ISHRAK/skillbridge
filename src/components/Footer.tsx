@@ -1,8 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function Footer() {
+  const pathname = usePathname();
+
+  // Hide footer inside dashboard, mentor portal, and admin panel for a clean workspace UI
+  if (pathname?.startsWith("/dashboard") || pathname?.startsWith("/admin")) {
+    return null;
+  }
+
   return (
     <footer className="bg-card text-card-foreground border-t border-border mt-auto transition-colors duration-300">
       <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
@@ -101,7 +109,9 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 border-t border-border pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-muted-foreground">&copy; 2026 Skillbridge Inc. All rights reserved.</p>
+          <p className="text-xs text-muted-foreground">
+            &copy; 2026 SkillBridge · University Software Development Project (SDP Academic Demonstration).
+          </p>
           <div className="flex space-x-6">
             <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
               <span className="sr-only">Twitter</span>

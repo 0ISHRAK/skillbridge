@@ -10,26 +10,36 @@ export default function SetAvailabilityPage() {
   const [saving, setSaving] = useState(false);
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  const slots = ["09:00 AM BDT", "10:00 AM BDT", "11:30 AM BDT", "01:00 PM BDT", "02:30 PM BDT", "04:00 PM BDT", "06:00 PM BDT", "08:30 PM BDT", "10:00 PM BDT"];
+  const slots = [
+    "09:00 AM BDT",
+    "10:00 AM BDT",
+    "11:30 AM BDT",
+    "01:00 PM BDT",
+    "02:30 PM BDT",
+    "04:00 PM BDT",
+    "06:00 PM BDT",
+    "08:30 PM BDT",
+    "10:00 PM BDT",
+  ];
 
   useEffect(() => {
-    fetchAvailability();
-  }, []);
-
-  const fetchAvailability = async () => {
-    try {
-      const res = await fetch("/api/mentor/availability");
-      if (res.ok) {
-        const data = await res.json();
+    let isMounted = true;
+    fetch("/api/mentor/availability")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data) return;
         setAvailableDays(data.days || []);
         setAvailableSlots(data.slots || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch availability:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      })
+      .catch((err) => console.error("Failed to fetch availability:", err))
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleToggleDay = (day: string) => {
     setAvailableDays((prev) =>
@@ -41,6 +51,25 @@ export default function SetAvailabilityPage() {
     setAvailableSlots((prev) =>
       prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]
     );
+  };
+
+  // Presets
+  const handlePresetWeekdays = () => {
+    setAvailableDays(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
+  };
+
+  const handlePresetEvenings = () => {
+    setAvailableSlots(["06:00 PM BDT", "08:30 PM BDT", "10:00 PM BDT"]);
+  };
+
+  const handlePresetAll = () => {
+    setAvailableDays([...days]);
+    setAvailableSlots([...slots]);
+  };
+
+  const handleClearAll = () => {
+    setAvailableDays([]);
+    setAvailableSlots([]);
   };
 
   const handleSave = async () => {
@@ -64,7 +93,7 @@ export default function SetAvailabilityPage() {
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto space-y-6 animate-pulse">
+      <div className="max-w-3xl mx-auto space-y-6 animate-pulse">
         <div className="h-10 bg-muted rounded-xl w-1/2" />
         <div className="h-48 bg-muted rounded-2xl" />
         <div className="h-48 bg-muted rounded-2xl" />
@@ -73,22 +102,61 @@ export default function SetAvailabilityPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-scale-up">
+    <div className="max-w-3xl mx-auto space-y-6 animate-scale-up">
       {/* Header */}
-      <div className="space-y-1 border-b border-border pb-5">
-        <h1 className="text-2xl font-extrabold tracking-tight">Set My Availability</h1>
-        <p className="text-xs text-muted-foreground">Select available tutoring days and block time slots. These will sync with student booking calendars.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-5 gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-extrabold tracking-tight">Set My Availability Schedule</h1>
+          <p className="text-xs text-muted-foreground">
+            Configure your tutoring schedule. Students will see these slots in your 1-on-1 booking calendar.
+          </p>
+        </div>
+
+        {/* Quick presets */}
+        <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={handlePresetWeekdays}
+            className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-muted hover:bg-muted/80 text-foreground border border-border transition-colors cursor-pointer"
+          >
+            ⚡ Weekdays
+          </button>
+          <button
+            type="button"
+            onClick={handlePresetEvenings}
+            className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-muted hover:bg-muted/80 text-foreground border border-border transition-colors cursor-pointer"
+          >
+            🌙 Evenings (6-10 PM)
+          </button>
+          <button
+            type="button"
+            onClick={handlePresetAll}
+            className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors cursor-pointer"
+          >
+            🌟 Select All
+          </button>
+          <button
+            type="button"
+            onClick={handleClearAll}
+            className="px-2 py-1 text-[10px] font-bold rounded-lg bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20 transition-colors cursor-pointer"
+          >
+            🧹 Clear
+          </button>
+        </div>
       </div>
 
       {isSaved && (
-        <div className="p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-semibold text-center">
-          ✓ Tutoring availability slots synced successfully!
+        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-black text-center flex items-center justify-center gap-2">
+          <span>✓</span> Tutoring availability schedule synced successfully!
         </div>
       )}
 
       {/* Days Selection */}
       <div className="p-6 rounded-2xl bg-card border border-border shadow-sm space-y-4">
-        <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">1. Available Days of the Week</h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">1. Available Days of the Week</h2>
+          <span className="text-xs font-bold text-primary">{availableDays.length} / 7 Days Selected</span>
+        </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {days.map((day) => {
@@ -97,9 +165,9 @@ export default function SetAvailabilityPage() {
               <button
                 key={day}
                 onClick={() => handleToggleDay(day)}
-                className={`py-3 rounded-xl border text-center text-xs font-semibold transition-all cursor-pointer ${
+                className={`py-3 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
                   isSelected
-                    ? "bg-primary border-primary text-primary-foreground font-bold shadow-sm shadow-primary/15"
+                    ? "bg-primary border-primary text-primary-foreground font-black shadow-sm shadow-primary/15"
                     : "bg-background border-border text-muted-foreground hover:border-primary/50"
                 }`}
               >
@@ -112,7 +180,10 @@ export default function SetAvailabilityPage() {
 
       {/* Slots Selection */}
       <div className="p-6 rounded-2xl bg-card border border-border shadow-sm space-y-4">
-        <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">2. Tutoring Hours (BDT Timezone)</h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">2. Tutoring Hours (BDT Timezone)</h2>
+          <span className="text-xs font-bold text-emerald-400">{availableSlots.length} / 9 Slots Selected</span>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {slots.map((slot) => {
@@ -123,31 +194,31 @@ export default function SetAvailabilityPage() {
                 onClick={() => handleToggleSlot(slot)}
                 className={`p-3.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
                   isSelected
-                    ? "border-emerald-500 bg-emerald-500/5 text-emerald-500 font-bold"
+                    ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400 font-black shadow-xs"
                     : "border-border bg-background text-muted-foreground hover:border-primary/50"
                 }`}
               >
-                <span className="text-xs">{slot}</span>
-                <span className="text-[10px] uppercase font-bold">{isSelected ? "✓" : ""}</span>
+                <span className="text-xs font-semibold">{slot}</span>
+                <span className="text-xs font-black">{isSelected ? "✓" : "+"}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Summary & Save */}
-      <div className="p-4 rounded-xl bg-muted/50 border border-border text-[10px] text-muted-foreground">
-        <span className="font-bold text-foreground">{availableDays.length}</span> days and <span className="font-bold text-foreground">{availableSlots.length}</span> time slots selected.
-        Students will be able to book during these windows.
-      </div>
+      {/* Summary & Save Footer */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-muted/40 border border-border">
+        <div className="text-xs text-muted-foreground">
+          <span className="font-bold text-foreground">{availableDays.length}</span> days and{" "}
+          <span className="font-bold text-foreground">{availableSlots.length}</span> time slots configured.
+        </div>
 
-      <div className="text-right">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 h-10 bg-primary text-primary-foreground font-bold text-xs rounded-lg hover:bg-primary/95 transition-all shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50"
+          className="w-full sm:w-auto px-6 py-2.5 bg-primary text-primary-foreground font-black text-xs rounded-xl hover:bg-primary/95 transition-all shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50"
         >
-          {saving ? "Saving..." : "Save Availability"}
+          {saving ? "Saving Schedule..." : "Save Availability Schedule"}
         </button>
       </div>
     </div>

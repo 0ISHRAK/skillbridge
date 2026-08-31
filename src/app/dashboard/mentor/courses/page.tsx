@@ -23,22 +23,25 @@ export default function MentorCoursesListPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
-
-  const fetchCourses = async () => {
-    try {
-      const res = await fetch("/api/mentor/courses");
-      if (res.ok) {
-        const data = await res.json();
-        setCourses(data.courses || []);
+    let isMounted = true;
+    async function loadCourses() {
+      try {
+        const res = await fetch("/api/mentor/courses");
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setCourses(data.courses || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch courses:", err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    } catch (err) {
-      console.error("Failed to fetch courses:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+    void loadCourses();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleTogglePublish = async (id: string, currentStatus: boolean, isApproved: boolean) => {
     if (!isApproved) {

@@ -40,6 +40,27 @@ export async function PUT(request: Request) {
       },
     });
 
+    // Send in-app notification to the mentor
+    if (approved) {
+      await prisma.notification.create({
+        data: {
+          userId: mentor.id,
+          title: "🎉 Mentor Application Approved!",
+          content: "Congratulations! Your mentor profile has been verified and approved by administration. You can now set your availability schedule and publish courses.",
+          link: "/dashboard/mentor/availability",
+        },
+      });
+    } else {
+      await prisma.notification.create({
+        data: {
+          userId: mentor.id,
+          title: "⚠️ Mentor Application Update",
+          content: "Your mentor application was reviewed and not approved at this time. Please update your profile information or contact support.",
+          link: "/dashboard/settings",
+        },
+      });
+    }
+
     return NextResponse.json({
       message: `Mentor verification status successfully toggled to ${approved}`,
       mentor: {

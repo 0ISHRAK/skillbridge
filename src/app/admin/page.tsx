@@ -15,41 +15,44 @@ interface Analytics {
   popularCourses: { id: string; title: string; mentorName: string; enrollmentsCount: number }[];
 }
 
+interface RecentUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  isEmailVerified: boolean;
+}
+
 export default function AdminOverviewPage() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [recentUsers, setRecentUsers] = useState<any[]>([]);
+  const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
 
   useEffect(() => {
-    fetchAnalytics();
-    fetchRecentUsers();
+    let isMounted = true;
+    Promise.all([
+      fetch("/api/admin/analytics").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/admin/users").then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([analyticsData, usersData]) => {
+        if (!isMounted) return;
+        if (analyticsData?.analytics) {
+          setAnalytics(analyticsData.analytics);
+        }
+        if (usersData?.users) {
+          setRecentUsers(usersData.users.slice(0, 5));
+        }
+      })
+      .catch((err) => console.error("Failed to load admin analytics:", err))
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
-
-  const fetchAnalytics = async () => {
-    try {
-      const res = await fetch("/api/admin/analytics");
-      if (res.ok) {
-        const data = await res.json();
-        setAnalytics(data.analytics);
-      }
-    } catch (err) {
-      console.error("Failed to fetch analytics:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchRecentUsers = async () => {
-    try {
-      const res = await fetch("/api/admin/users");
-      if (res.ok) {
-        const data = await res.json();
-        setRecentUsers(data.users?.slice(0, 5) || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch users:", err);
-    }
-  };
 
   if (loading) {
     return (
@@ -146,10 +149,18 @@ export default function AdminOverviewPage() {
         {/* Quick Actions */}
         <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
           <h2 className="text-sm font-bold">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <Link href="/admin/mentors" className="p-4 rounded-xl border border-border hover:border-amber-500/50 hover:bg-amber-500/5 transition-all text-center space-y-2">
               <span className="text-2xl block">🎓</span>
               <p className="text-[10px] font-bold">Verify Mentors</p>
+            </Link>
+            <Link href="/admin/payments" className="p-4 rounded-xl border border-border hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-center space-y-2">
+              <span className="text-2xl block">💸</span>
+              <p className="text-[10px] font-bold">Mentor Payouts</p>
+            </Link>
+            <Link href="/admin/rewards" className="p-4 rounded-xl border border-border hover:border-purple-500/50 hover:bg-purple-500/5 transition-all text-center space-y-2">
+              <span className="text-2xl block">🎁</span>
+              <p className="text-[10px] font-bold">Rewards Store</p>
             </Link>
             <Link href="/admin/users" className="p-4 rounded-xl border border-border hover:border-blue-500/50 hover:bg-blue-500/5 transition-all text-center space-y-2">
               <span className="text-2xl block">👥</span>

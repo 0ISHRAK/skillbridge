@@ -68,6 +68,17 @@ export async function POST(request: Request) {
               where: { id: user.userId },
               data: { tokenBalance: { decrement: tokensSpent } },
             }),
+            prisma.tokenTransaction.create({
+              data: {
+                userId: user.userId,
+                amount: -tokensSpent,
+                type: "skill_swap",
+                title: `Skill Exchange Request: ${post.offeredSkill || "Skill Swap"}`,
+                description: `Sent exchange request for "${post.offeredSkill}". ${tokensSpent} tokens held in escrow.`,
+                referenceId: postId,
+                balanceAfter: requester.tokenBalance - tokensSpent,
+              },
+            }),
           ]
         : []),
     ]);

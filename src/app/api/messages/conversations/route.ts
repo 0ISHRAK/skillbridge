@@ -35,6 +35,7 @@ export async function GET() {
 
     for (const msg of messages) {
       const otherId = msg.senderId === userId ? msg.receiverId : msg.senderId;
+      if (!otherId || otherId === userId) continue;
 
       if (!conversationMap.has(otherId)) {
         conversationMap.set(otherId, {

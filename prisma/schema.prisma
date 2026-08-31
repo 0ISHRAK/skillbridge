@@ -36,7 +36,7 @@ model User {
   isVerified         Boolean            @default(false)
   verificationStatus String             @default("unverified") // unverified, pending, verified, rejected
   verificationDoc    String?
-  tokenBalance       Int                @default(100) // Default starting tokens
+  tokenBalance       Int                @default(25) // Default starting tokens (25 tokens = ৳250 value)
   subscriptionStatus String             @default("inactive") // inactive, active, cancelled, expired
   subscriptionTier   String?            // null, pro_learner, mentor_plus, all_access
   subscriptionPlan   String?            // alias for subscriptionTier
@@ -62,6 +62,10 @@ model User {
   sessions           Session[]
   skillExchangesGiven SkillExchange[]   @relation("RequesterExchanges")
   skillExchangesReceived SkillExchange[] @relation("ProviderExchanges")
+  redemptions        RewardRedemption[]
+  tokenTransactions  TokenTransaction[]
+  quizAttempts       QuizAttempt[]
+  payoutRequests     PayoutRequest[]
 }
 
 model Course {
@@ -86,6 +90,7 @@ model Course {
 
   mentor         User         @relation("MentorCourses", fields: [mentorId], references: [id], onDelete: Cascade)
   enrollments    Enrollment[]
+  quizAttempts   QuizAttempt[]
 }
 
 model Enrollment {
@@ -242,5 +247,91 @@ model Session {
   createdAt DateTime @default(now())
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Reward {
+  id            String             @id @default(uuid())
+  title         String
+  description   String
+  tokenCost     Int
+  type          String             @default("discount") // discount, certificate, learning_pack, challenge, mentorship, badge
+  icon          String?            @default("🎁")
+  isActive      Boolean            @default(true)
+  isOneTime     Boolean            @default(false)
+  discountValue Int?
+  badge         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  redemptions   RewardRedemption[]
+}
+
+model RewardRedemption {
+  id             String   @id @default(uuid())
+  rewardId       String
+  userId         String
+  tokensSpent    Int
+  redemptionCode String   @unique
+  status         String   @default("active") // active, used, expired
+  metadata       String?
+  createdAt      DateTime @default(now())
+
+  reward         Reward   @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TokenTransaction {
+  id           String   @id @default(uuid())
+  userId       String
+  amount       Int      // positive = earned, negative = spent
+  type         String   // lesson_complete, quiz_pass, quiz_bonus, course_complete, course_bonus, milestone_complete, reward_redemption, admin_adjustment, wallet_topup
+  title        String
+  description  String?
+  referenceId  String?  // e.g. lessonId, courseId, quizId, rewardId
+  balanceAfter Int
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, referenceId, type])
+}
+
+model QuizAttempt {
+  id             String   @id @default(uuid())
+  userId         String
+  courseId       String
+  lessonId       String
+  score          Int      // 0 - 100 percentage
+  passed         Boolean
+  totalQuestions Int
+  correctAnswers Int
+  tokensAwarded  Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course         Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([userId, courseId, lessonId])
+}
+
+model PayoutRequest {
+  id            String   @id @default(uuid())
+  mentorId      String
+  amount        Int      // In BDT
+  method        String   // bkash, nagad, rocket, bank
+  accountNumber String
+  accountName   String?  // for bank transfer
+  bankName      String?
+  branchName    String?
+  routingNumber String?
+  status        String   @default("pending") // pending, processing, completed, rejected
+  trxId         String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  mentor        User     @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+
+  @@index([mentorId, status])
 }
 

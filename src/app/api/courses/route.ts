@@ -54,12 +54,12 @@ export async function GET(request: Request) {
       requirements: safeJsonParse(course.requirements, []),
     }));
 
-    return NextResponse.json({ courses: parsedCourses });
+    return NextResponse.json({ courses: parsedCourses }, { headers: noCacheHeaders });
   } catch (err) {
     console.error("GET Courses error:", err);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500, headers: noCacheHeaders }
     );
   }
 }

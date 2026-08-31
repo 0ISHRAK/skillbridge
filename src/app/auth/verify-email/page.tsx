@@ -21,10 +21,11 @@ export default function VerifyEmailPage() {
   }, []);
 
   useEffect(() => {
-    if (timer > 0) {
-      const interval = setInterval(() => setTimer(timer - 1), 1000);
-      return () => clearInterval(interval);
-    }
+    if (timer <= 0) return;
+    const interval = setInterval(() => {
+      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
   }, [timer]);
 
   const handleVerify = async (e: React.FormEvent) => {

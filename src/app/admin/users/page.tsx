@@ -21,22 +21,22 @@ export default function AdminUsersPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch("/api/admin/users");
-      if (res.ok) {
-        const data = await res.json();
+    let isMounted = true;
+    fetch("/api/admin/users")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data) return;
         setUsers(data.users || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch users:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      })
+      .catch((err) => console.error("Failed to fetch users:", err))
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleToggleRole = async (userId: string, currentRole: string) => {
     const newRole = currentRole === "learner" ? "mentor" : "learner";
@@ -122,6 +122,29 @@ export default function AdminUsersPage() {
     );
   }
 
+  const handleExportCSV = () => {
+    const headers = ["User ID", "Name", "Email", "Role", "Token Balance", "Mentor Approved", "Email Verified", "Registration Date"];
+    const rows = filtered.map((u) => [
+      u.id.slice(0, 8),
+      `"${u.name.replace(/"/g, '""')}"`,
+      u.email,
+      u.role,
+      u.tokenBalance,
+      u.isMentorApproved ? "YES" : "NO",
+      u.isEmailVerified ? "YES" : "NO",
+      new Date(u.createdAt).toISOString().split("T")[0],
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].map((e) => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `skillbridge_users_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -130,6 +153,13 @@ export default function AdminUsersPage() {
           <h1 className="text-2xl font-extrabold tracking-tight">User Management</h1>
           <p className="text-xs text-muted-foreground mt-1">{users.length} total registered users</p>
         </div>
+
+        <button
+          onClick={handleExportCSV}
+          className="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-border bg-card hover:bg-muted text-foreground transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+        >
+          <span>📥</span> Export Users CSV
+        </button>
       </div>
 
       {/* Filters */}

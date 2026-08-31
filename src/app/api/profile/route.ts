@@ -29,14 +29,18 @@ export async function GET() {
         email: user.email,
         name: user.name,
         role: user.role.toLowerCase(),
+        avatar: user.avatar || "👨‍💻",
         avatarUrl: user.avatarUrl,
-        bio: user.bio,
-        hourlyRate: user.hourlyRate,
+        headline: user.headline || "",
+        bio: user.bio || "",
+        experienceYears: user.experienceYears || 0,
+        linkedinUrl: user.linkedinUrl || "",
+        hourlyRate: user.hourlyRate || 1000,
         skills: safeJsonParse(user.skills, []),
         availabilityDays: safeJsonParse(user.availabilityDays, []),
         availabilitySlots: safeJsonParse(user.availabilitySlots, []),
         isMentorApproved: user.isMentorApproved,
-        targetHours: user.targetHours,
+        targetHours: user.targetHours || "Moderate: 3 - 5 hours per week (Recommended)",
       },
     });
   } catch (err) {
@@ -61,8 +65,12 @@ export async function PUT(request: Request) {
     const payload = await request.json();
     const {
       name,
+      avatar,
       avatarUrl,
+      headline,
       bio,
+      experienceYears,
+      linkedinUrl,
       hourlyRate,
       skills,
       availabilityDays,
@@ -83,8 +91,18 @@ export async function PUT(request: Request) {
       updateData.name = trimmedName;
     }
 
+    if (avatar !== undefined) updateData.avatar = String(avatar);
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
-    if (bio !== undefined) updateData.bio = String(bio).slice(0, 1000);
+    if (headline !== undefined) updateData.headline = String(headline).slice(0, 200);
+    if (bio !== undefined) updateData.bio = String(bio).slice(0, 2000);
+    if (linkedinUrl !== undefined) updateData.linkedinUrl = String(linkedinUrl).slice(0, 255);
+
+    if (experienceYears !== undefined) {
+      const exp = Number(experienceYears);
+      if (!isNaN(exp) && exp >= 0) {
+        updateData.experienceYears = Math.min(50, Math.max(0, Math.round(exp)));
+      }
+    }
 
     if (hourlyRate !== undefined) {
       const rate = Number(hourlyRate);
@@ -141,8 +159,12 @@ export async function PUT(request: Request) {
         email: updatedUser.email,
         name: updatedUser.name,
         role: updatedUser.role.toLowerCase(),
+        avatar: updatedUser.avatar,
         avatarUrl: updatedUser.avatarUrl,
+        headline: updatedUser.headline,
         bio: updatedUser.bio,
+        experienceYears: updatedUser.experienceYears,
+        linkedinUrl: updatedUser.linkedinUrl,
         hourlyRate: updatedUser.hourlyRate,
         skills: safeJsonParse(updatedUser.skills, []),
         availabilityDays: safeJsonParse(updatedUser.availabilityDays, []),

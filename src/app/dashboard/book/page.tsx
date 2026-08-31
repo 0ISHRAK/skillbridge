@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 interface Mentor {
@@ -14,8 +14,9 @@ interface Mentor {
   availabilitySlots: string[];
 }
 
-export default function BookSessionDashboardPage() {
+function BookSessionContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [tokenBalance, setTokenBalance] = useState(0);
   const [mentors, setMentors] = useState<Mentor[]>([]);
@@ -30,40 +31,59 @@ export default function BookSessionDashboardPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    let isMounted = true;
+    async function loadData() {
+      try {
+        const [meRes, profileRes] = await Promise.all([
+          fetch("/api/mentors"),
+          fetch("/api/auth/me"),
+        ]);
 
-  const fetchData = async () => {
-    try {
-      const [meRes, profileRes] = await Promise.all([
-        fetch("/api/mentors"),
-        fetch("/api/auth/me"),
-      ]);
+        if (meRes.ok && isMounted) {
+          const data = await meRes.json();
+          const loadedMentors = data.mentors || [];
+          setMentors(loadedMentors);
 
-      if (meRes.ok) {
-        const data = await meRes.json();
-        setMentors(data.mentors || []);
+          const paramMentorId = searchParams.get("mentor");
+          const paramMentorName = searchParams.get("mentorName");
+          if (paramMentorId || paramMentorName) {
+            const found = loadedMentors.find(
+              (m: Mentor) =>
+                m.id === paramMentorId ||
+                m.name.toLowerCase() === paramMentorName?.toLowerCase()
+            );
+            if (found) {
+              setSelectedMentor(found);
+            }
+          }
+        }
+
+        if (profileRes.ok && isMounted) {
+          const data = await profileRes.json();
+          setTokenBalance(data.user?.tokenBalance || 0);
+        }
+      } catch (err) {
+        console.error("Failed to fetch:", err);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-
-      if (profileRes.ok) {
-        const data = await profileRes.json();
-        setTokenBalance(data.user?.tokenBalance || 0);
-      }
-    } catch (err) {
-      console.error("Failed to fetch:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+    void loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [searchParams]);
 
   const getNextDates = () => {
     const dates = [];
     const today = new Date();
+    const hasConfiguredDays = selectedMentor?.availabilityDays && selectedMentor.availabilityDays.length > 0;
+
     for (let i = 0; i < 7; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       const dayName = d.toLocaleDateString("en-US", { weekday: "long" });
-      if (selectedMentor?.availabilityDays?.includes(dayName)) {
+      if (!hasConfiguredDays || selectedMentor?.availabilityDays?.includes(dayName)) {
         dates.push({
           label: i === 0 ? "Today" : i === 1 ? "Tomorrow" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
           value: d.toISOString().split("T")[0],
@@ -85,7 +105,7 @@ export default function BookSessionDashboardPage() {
       return;
     }
 
-    const tokenCost = Math.max(1, Math.ceil(selectedMentor.hourlyRate / 1000));
+    const tokenCost = Math.max(1, Math.ceil(selectedMentor.hourlyRate / 10));
     if (tokenBalance < tokenCost) {
       setError("Insufficient tokens in wallet. Please recharge to complete booking.");
       return;
@@ -139,7 +159,7 @@ export default function BookSessionDashboardPage() {
     );
   }
 
-  const tokenCost = selectedMentor ? Math.max(1, Math.ceil(selectedMentor.hourlyRate / 1000)) : 0;
+  const tokenCost = selectedMentor ? Math.max(1, Math.ceil(selectedMentor.hourlyRate / 10)) : 0;
   const availableDates = getNextDates();
 
   return (
@@ -172,7 +192,7 @@ export default function BookSessionDashboardPage() {
               <div className="space-y-3">
                 {mentors.map((mentor) => {
                   const isSelected = selectedMentor?.id === mentor.id;
-                  const cost = Math.max(1, Math.ceil(mentor.hourlyRate / 1000));
+                  const cost = Math.max(1, Math.ceil(mentor.hourlyRate / 10));
                   return (
                     <button
                       key={mentor.id}
@@ -194,7 +214,9 @@ export default function BookSessionDashboardPage() {
                       <div className="flex-1 space-y-1 min-w-0">
                         <div className="flex justify-between items-baseline">
                           <h3 className="text-xs font-bold text-foreground">{mentor.name}</h3>
-                          <span className="text-[10px] font-bold text-primary">{cost} Token{cost > 1 ? "s" : ""} / session</span>
+                          <span className="text-[10px] font-bold text-primary">
+                            {cost} Token{cost > 1 ? "s" : ""} <span className="text-muted-foreground font-normal">(৳{(cost * 10).toLocaleString()})</span>
+                          </span>
                         </div>
                         <p className="text-[10px] text-muted-foreground line-clamp-1">
                           {mentor.bio || "Experienced mentor ready to help"}
@@ -276,28 +298,29 @@ export default function BookSessionDashboardPage() {
                   {/* Pick Time */}
                   <div className="space-y-2">
                     <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">Available Times</label>
-                    {selectedMentor.availabilitySlots.length > 0 ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        {selectedMentor.availabilitySlots.map((slot) => (
-                          <button
-                            type="button"
-                            key={slot}
-                            onClick={() => setSelectedSlot(slot)}
-                            className={`py-2 rounded-lg border text-center text-[10px] font-semibold transition-all ${
-                              selectedSlot === slot
-                                ? "bg-primary border-primary text-primary-foreground font-bold"
-                                : "bg-background border-border text-muted-foreground hover:border-primary"
-                            }`}
-                          >
-                            {slot}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-muted-foreground p-3 rounded-lg border border-border text-center">
-                        Mentor hasn&apos;t set time slots yet.
-                      </p>
-                    )}
+                    {(() => {
+                      const slots = selectedMentor.availabilitySlots && selectedMentor.availabilitySlots.length > 0
+                        ? selectedMentor.availabilitySlots
+                        : ["10:00 AM BDT", "02:30 PM BDT", "06:00 PM BDT", "08:30 PM BDT"];
+                      return (
+                        <div className="grid grid-cols-2 gap-2">
+                          {slots.map((slot) => (
+                            <button
+                              type="button"
+                              key={slot}
+                              onClick={() => setSelectedSlot(slot)}
+                              className={`py-2 rounded-lg border text-center text-[10px] font-semibold transition-all ${
+                                selectedSlot === slot
+                                  ? "bg-primary border-primary text-primary-foreground font-bold"
+                                  : "bg-background border-border text-muted-foreground hover:border-primary"
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Billing */}
@@ -348,5 +371,13 @@ export default function BookSessionDashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BookSessionDashboardPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-muted-foreground">Loading session booking...</div>}>
+      <BookSessionContent />
+    </Suspense>
   );
 }

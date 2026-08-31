@@ -13,6 +13,12 @@ export default function DashboardLayout({
   const router = useRouter();
   const [userName, setUserName] = useState("Fahim Hossain");
   const [userRole, setUserRole] = useState("learner");
+  const [userAvatar, setUserAvatar] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("userAvatar");
+    }
+    return null;
+  });
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
@@ -33,6 +39,11 @@ export default function DashboardLayout({
         localStorage.setItem("userEmail", user.email);
         localStorage.setItem("userName", user.name);
         localStorage.setItem("userRole", user.role);
+        const av = user.avatar || user.avatarUrl || null;
+        if (av) {
+          localStorage.setItem("userAvatar", av);
+          setUserAvatar(av);
+        }
         setUserName(user.name || "User");
         setUserRole(user.role || "learner");
 
@@ -90,6 +101,7 @@ export default function DashboardLayout({
     { name: "Profile Settings", href: "/dashboard/settings", icon: "⚙️" },
   ] : [
     { name: "Overview", href: "/dashboard", icon: "📊" },
+    { name: "Rewards & Store", href: "/dashboard/rewards", icon: "🎁" },
     { name: "My Courses", href: "/dashboard/courses", icon: "📚" },
     { name: "My Sessions", href: "/dashboard/sessions", icon: "📅" },
     { name: "Skill Exchange", href: "/dashboard/exchanges", icon: "🤝" },
@@ -228,8 +240,14 @@ export default function DashboardLayout({
         {/* User profile & Logout */}
         <div className="border-t border-border pt-4 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-lg font-bold border border-primary/20">
-              {userName.substring(0, 1)}
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-lg font-bold border border-primary/20 overflow-hidden shrink-0">
+              {userAvatar && userAvatar.startsWith("http") ? (
+                <img src={userAvatar} alt="" className="w-full h-full object-cover" />
+              ) : userAvatar ? (
+                <span className="text-xl leading-none">{userAvatar}</span>
+              ) : (
+                userName.substring(0, 1).toUpperCase()
+              )}
             </div>
             <div className="overflow-hidden">
               <p className="text-xs font-bold text-foreground truncate">{userName}</p>
